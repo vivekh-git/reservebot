@@ -1,0 +1,33 @@
+name: Daily Reservation Sniper
+
+on:
+  schedule:
+    - cron: '58 15 * * *'  # Runs at 8:58 AM PDT (15:58 UTC) every day
+  workflow_dispatch:      # Allows you to click a button to run it manually
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install chromium
+
+      - name: Run Sniper
+        env:
+          MY_USER_1: ${{ secrets.MY_USER_1 }}
+          MY_PASS_1: ${{ secrets.MY_PASS_1 }}
+          MY_USER_2: ${{ secrets.MY_USER_2 }}
+          MY_PASS_2: ${{ secrets.MY_PASS_2 }}
+          MY_USER_3: ${{ secrets.MY_USER_3 }}
+          MY_PASS_3: ${{ secrets.MY_PASS_3 }}
+        run: python sniper.py
