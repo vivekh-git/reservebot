@@ -181,17 +181,19 @@ def run_sniper(user, password, target_date):
         print(f"[{user}] Closing browser.")
         browser.close()
 
-def next_saturday():
+def next_target_date():
     today = date.today()
-    days_ahead = (5 - today.weekday()) % 7  # 5 = Saturday, 0 = today if already Saturday
+    if today.weekday() in (5, 6):  # 5 = Saturday, 6 = Sunday
+        return str(today)
+    days_ahead = (5 - today.weekday()) % 7  # next Saturday
     return str(today + timedelta(days=days_ahead))
 
 def load_target_date(args):
     if args.date:
         print(f"[config] Using date from --date argument: {args.date}")
         return args.date
-    computed = next_saturday()
-    print(f"[config] No date provided — defaulting to next Saturday: {computed}")
+    computed = next_target_date()
+    print(f"[config] No date provided — defaulting to: {computed}")
     return computed
 
 if __name__ == "__main__":
