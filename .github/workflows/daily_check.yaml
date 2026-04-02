@@ -2,7 +2,7 @@ name: Daily Reservation Sniper
 
 on:
   schedule:
-    - cron: '17 18 * * *'  # Runs at 11:17 AM PDT (18:17 UTC) every day
+    - cron: '30 18 * * *'  # Runs at 11:30 AM PDT (18:30 UTC) every day
   workflow_dispatch:      # Allows you to click a button to run it manually
 
 jobs:
