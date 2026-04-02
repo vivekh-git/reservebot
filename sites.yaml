@@ -1,0 +1,77 @@
+sites:
+  - name: "Mount Madonna"
+    credentials:
+      - user_env: MY_USER_1
+        pass_env: MY_PASS_1
+      - user_env: MY_USER_2
+        pass_env: MY_PASS_2
+      - user_env: MY_USER_3
+        pass_env: MY_PASS_3
+    steps:
+      - action: navigate
+        url: "https://reservations.mountmadonna.org/visitors/login"
+
+      - action: wait_for
+        selector: 'input[name="visitor[email]"]'
+
+      - action: fill
+        selector: 'input[name="visitor[email]"]'
+        value: "{user}"
+
+      - action: fill
+        selector: 'input[name="visitor[password]"]'
+        value: "{password}"
+
+      - action: click
+        selector: 'input[type="submit"][value="Log in"]'
+
+      - action: wait_for_load
+
+      - action: assert_url_not
+        url: "https://reservations.mountmadonna.org/visitors/login"
+        error: "Login failed — check credentials"
+
+      - action: navigate
+        url: "https://reservations.mountmadonna.org/reservations/new"
+
+      - action: if_on_url
+        url: "https://reservations.mountmadonna.org/visitors/confirm_information"
+        then:
+          - action: click
+            selector: 'input[type="submit"][value="Continue"]'
+          - action: wait_for_url
+            url: "**/reservations/new"
+
+      - action: poll
+        selector: ".date_option.available"
+        match_attribute: "data-date"
+        match_value: "{target_date}"
+        on_match:
+          - action: click_preferred
+            selector: ".slot.highlight"
+            text_selector: ".time"
+            preferred: ["4:00", "5:00", "3:00"]
+
+          - action: wait_for
+            selector: "#card-button"
+
+          - action: click
+            selector: "#card-button"
+
+          - action: wait_for
+            selector: ".price_option.no_contribution"
+
+          - action: click
+            selector: ".price_option.no_contribution"
+
+          - action: wait_for
+            selector: "#card-button"
+
+          - action: click
+            selector: "#card-button"
+
+          - action: wait_for_load
+
+          - action: assert_url
+            url: "https://reservations.mountmadonna.org/reservations/confirmation"
+            success: "BOOKING CONFIRMED!"
