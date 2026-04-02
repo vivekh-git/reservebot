@@ -2,7 +2,7 @@ name: Daily Reservation Sniper
 
 on:
   schedule:
-    - cron: '58 15 * * *'  # Runs at 8:58 AM PDT (15:58 UTC) every day
+    - cron: '17 18 * * *'  # Runs at 11:17 AM PDT (18:17 UTC) every day
   workflow_dispatch:      # Allows you to click a button to run it manually
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright
+          pip install playwright requests
           playwright install chromium
 
       - name: Run Sniper
@@ -30,4 +30,5 @@ jobs:
           MY_PASS_2: ${{ secrets.MY_PASS_2 }}
           MY_USER_3: ${{ secrets.MY_USER_3 }}
           MY_PASS_3: ${{ secrets.MY_PASS_3 }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
         run: python sniper.py
