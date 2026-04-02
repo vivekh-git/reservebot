@@ -1,0 +1,30 @@
+name: SAT Registration Workflow
+
+on:
+  workflow_dispatch:  # Triggered via cron-job.org or manually from GitHub Actions UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright requests pyyaml
+          playwright install chromium
+
+      - name: Run SAT Workflow
+        env:
+          SAT_USER_1: ${{ secrets.SAT_USER_1 }}
+          SAT_PASS_1: ${{ secrets.SAT_PASS_1 }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+        run: |
+          echo "Workflow started at: $(TZ='America/Los_Angeles' date)"
+          python sniper.py --config sites_sat.yaml

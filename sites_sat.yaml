@@ -1,0 +1,178 @@
+sites:
+  - name: "College Board SAT"
+    credentials:
+      - user_env: SAT_USER_1
+        pass_env: SAT_PASS_1
+    steps:
+      - action: navigate
+        url: "https://mysat.collegeboard.org/login"
+
+      - action: wait_for
+        selector: "#onetrust-accept-btn-handler"
+
+      - action: click
+        selector: "#onetrust-accept-btn-handler"
+
+      - action: wait_for
+        selector: "#qc-id-login-button-continue"
+
+      - action: click
+        selector: "#qc-id-login-button-continue"
+
+      - action: wait_for
+        selector: 'input[name="identifier"]'
+
+      - action: fill
+        selector: 'input[name="identifier"]'
+        value: "{user}"
+
+      - action: click
+        selector: 'input[type="submit"][value="Next"]'
+
+      - action: wait_for
+        selector: 'a[aria-label="Select Password."]'
+
+      - action: click
+        selector: 'a[aria-label="Select Password."]'
+
+      - action: wait_for
+        selector: 'input[name="credentials.passcode"]'
+
+      - action: fill
+        selector: 'input[name="credentials.passcode"]'
+        value: "{password}"
+
+      - action: click
+        selector: 'input[type="submit"][value="Verify"]'
+
+      - action: wait_for_url
+        url: "**/dashboard"
+        timeout: 30000
+
+      - action: assert_url_not
+        url: "https://mysat.collegeboard.org/login"
+        error: "Login failed — check credentials"
+
+      - action: wait_for
+        selector: "#qc-id-header-register-button"
+
+      - action: click
+        selector: "#qc-id-header-register-button"
+
+      - action: wait_for_url
+        url: "**/personalInformation"
+        timeout: 15000
+
+      # Get Started interstitial
+      - action: wait_for
+        selector: "#qc-id-getstarted-button-getstarted"
+
+      - action: click
+        selector: "#qc-id-getstarted-button-getstarted"
+
+      # Confirm personal info
+      - action: wait_for
+        selector: "#qc-id-personalinfo-button-gradeconfirm"
+
+      - action: click
+        selector: "#qc-id-personalinfo-button-gradeconfirm"
+
+      # Continue past photo upload
+      - action: wait_for
+        selector: "#qc-id-photoupload-confirmphoto-button-continue"
+
+      - action: click
+        selector: "#qc-id-photoupload-confirmphoto-button-continue"
+
+      # Ethnicity: No, not of Hispanic origin
+      - action: wait_for
+        selector: "#checkBox-sdqEthnicityChoices-0"
+
+      - action: check
+        selector: "#checkBox-sdqEthnicityChoices-0"
+
+      # Race: Asian
+      - action: check
+        selector: "#checkBox-sdqRaceChoices-0"
+
+      # Parent 1 education: Bachelor's or four-year degree
+      - action: select
+        selector: "#parent1Education"
+        value: "Bachelor's or four-year degree"
+
+      # First language: English and another language
+      - action: click
+        selector: "#firstLanguage31"
+
+      # Best language: English and another language
+      - action: click
+        selector: "#bestLanguage31"
+
+      # Continue to next page
+      - action: wait_for
+        selector: "#qc-id-studentquestionnaire-button-continue"
+
+      - action: click
+        selector: "#qc-id-studentquestionnaire-button-continue"
+
+      # Grade point average (next page)
+      - action: wait_for
+        selector: "#gradePointAvg"
+
+      - action: select
+        selector: "#gradePointAvg"
+        value: "A- (90-92)"
+
+      # Save and exit questionnaire
+      - action: wait_for
+        selector: "#qc-id-studentquestionnaire-button-saveexit-enabled"
+
+      - action: click
+        selector: "#qc-id-studentquestionnaire-button-saveexit-enabled"
+
+      # Test center page
+      - action: wait_for_url
+        url: "**/testCenter"
+        timeout: 15000
+
+      - action: wait_for
+        selector: "#qc-id-selectdatecenter-button-getstarted"
+
+      - action: click
+        selector: "#qc-id-selectdatecenter-button-getstarted"
+
+      # Terms and conditions — scroll to bottom, accept, continue
+      - action: wait_for
+        selector: "#qc-id-termsconditions-scrollbox-termsconditions"
+
+      - action: scroll_to_bottom
+        selector: "#qc-id-termsconditions-scrollbox-termsconditions"
+
+      - action: check
+        selector: "#terms-acceptance-checkbox"
+
+      - action: wait_for
+        selector: "#qc-id-termsconditions-button-continue"
+
+      - action: click
+        selector: "#qc-id-termsconditions-button-continue"
+
+      # Select test location — click Next to proceed to date selection
+      - action: wait_for
+        selector: "#qc-id-selectdatecenter-testlocation-button-next"
+
+      - action: click
+        selector: "#qc-id-selectdatecenter-testlocation-button-next"
+
+      # Extract available test dates and email them
+      - action: wait_for
+        selector: "#qc-id-selectdatecenter-testdate-options-testdate"
+
+      - action: extract
+        selector: "#qc-id-selectdatecenter-testdate-options-testdate .calendar-card"
+        text_selector: ".satreg-date-box"
+        key: "available_dates"
+
+      - action: email_report
+        subject: "SAT available test dates"
+        body: "Available SAT test dates for {user}:\n\n{available_dates_text}"

@@ -72,8 +72,9 @@ def execute_step(page, step, ctx):
 
     elif action == "wait_for_url":
         pattern = resolve(step["url"], ctx)
-        print(f"  [{label}] -> waiting for URL: '{pattern}'")
-        page.wait_for_url(pattern, timeout=10000)
+        timeout = step.get("timeout", 30000)
+        print(f"  [{label}] -> waiting for URL: '{pattern}' (timeout: {timeout}ms)")
+        page.wait_for_url(pattern, timeout=timeout)
         print(f"  [{label}] -> URL: {page.url}")
 
     elif action == "fill":
@@ -106,6 +107,49 @@ def execute_step(page, step, ctx):
             print(f"  [{label}] -> FAILURE: expected '{url}', got '{page.url}'")
             return STEP_FAILURE
 
+    elif action == "check":
+        selector = step["selector"]
+        print(f"  [{label}] -> checking checkbox: '{selector}'")
+        page.check(selector)
+
+    elif action == "select":
+        selector = step["selector"]
+        value = resolve(step["value"], ctx)
+        print(f"  [{label}] -> selecting '{value}' in '{selector}'")
+        page.select_option(selector, label=value)
+
+    elif action == "extract":
+        selector = step["selector"]
+        text_selector = step.get("text_selector")
+        key = step.get("key", "extracted_data")
+        elements = page.query_selector_all(selector)
+        texts = []
+        for el in elements:
+            text_el = el.query_selector(text_selector) if text_selector else el
+            text = text_el.inner_text().strip() if text_el else ""
+            if text:
+                texts.append(text)
+        ctx[key] = texts
+        ctx[key + "_text"] = "\n".join(texts) if texts else "None found"
+        print(f"  [{label}] extracted {len(texts)} item(s) for '{key}': {texts}")
+
+    elif action == "email_report":
+        subject = resolve(step["subject"], ctx)
+        body = resolve(step["body"], ctx)
+        print(f"  [{label}] -> sending report email: '{subject}'")
+        send_email(subject, body)
+        ctx["email_sent"] = True
+        return STEP_CONTINUE
+
+    elif action == "scroll_to_bottom":
+        selector = step["selector"]
+        print(f"  [{label}] -> scrolling to bottom of '{selector}'")
+        page.eval_on_selector(selector, "el => el.scrollTop = el.scrollHeight")
+
+    elif action == "pause":
+        print(f"  [{label}] -> pausing for manual inspection")
+        page.pause()
+
     elif action == "if_on_url":
         url = resolve(step["url"], ctx)
         print(f"  [{label}] -> if_on_url '{url}' (current: {page.url})")
@@ -126,8 +170,15 @@ def execute_step(page, step, ctx):
 
 
 def execute_steps(page, steps, ctx):
+    is_ci = os.environ.get("CI") == "true"
     for step in steps:
+        label = ctx["user"]
+        print(f"\n[{label}] ── step: {step['action']} ──────────────────────────────")
         result = execute_step(page, step, ctx)
+        print(f"[{label}] URL after step: {page.url}")
+        if not is_ci and step.get("action") not in ("pause", "wait_for", "wait_for_load", "wait_for_url"):
+            print(f"[{label}] [local] pausing for inspection...")
+            page.pause()
         if result is not STEP_CONTINUE:
             return result
     return STEP_CONTINUE
@@ -237,16 +288,17 @@ def run_site(site_config, user, password, target_date):
         result = execute_steps(page, site_config["steps"], ctx)
         browser.close()
 
-    if result == STEP_SUCCESS:
-        send_email(
-            f"Reservation booked — {name} ({user})",
-            f"Successfully booked {target_date} at {ctx['booked_time']} for {user} on {name}.",
-        )
-    else:
-        send_email(
-            f"No reservation found — {name} ({user})",
-            f"Ran workflow for {target_date} on {name} — no available slots found for {user}.",
-        )
+    if not ctx.get("email_sent"):
+        if result == STEP_SUCCESS:
+            send_email(
+                f"Reservation booked — {name} ({user})",
+                f"Successfully booked {target_date} at {ctx['booked_time']} for {user} on {name}.",
+            )
+        elif result == STEP_FAILURE:
+            send_email(
+                f"No reservation found — {name} ({user})",
+                f"Ran workflow for {target_date} on {name} — no available slots found for {user}.",
+            )
 
 
 def load_target_date(args):
