@@ -2,7 +2,7 @@ name: Daily Reservation Sniper
 
 on:
   schedule:
-    - cron: '30 18 * * *'  # Runs at 11:30 AM PDT (18:30 UTC) every day
+    - cron: '47 19 * * *'  # Runs at 12:47 PM PDT (19:47 UTC) every day
   workflow_dispatch:      # Allows you to click a button to run it manually
 
 jobs:
@@ -31,4 +31,6 @@ jobs:
           MY_USER_3: ${{ secrets.MY_USER_3 }}
           MY_PASS_3: ${{ secrets.MY_PASS_3 }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-        run: python sniper.py
+        run: |
+          echo "Workflow started at: $(TZ='America/Los_Angeles' date)"
+          python sniper.py
