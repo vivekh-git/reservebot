@@ -183,9 +183,7 @@ def run_sniper(user, password, target_date):
 
 def next_saturday():
     today = date.today()
-    days_ahead = (5 - today.weekday()) % 7  # 5 = Saturday
-    if days_ahead == 0:
-        days_ahead = 7  # if today is Saturday, get next Saturday
+    days_ahead = (5 - today.weekday()) % 7  # 5 = Saturday, 0 = today if already Saturday
     return str(today + timedelta(days=days_ahead))
 
 def load_target_date(args):
