@@ -1,9 +1,7 @@
 name: Daily Reservation Sniper
 
 on:
-  schedule:
-    - cron: '47 19 * * *'  # Runs at 12:47 PM PDT (19:47 UTC) every day
-  workflow_dispatch:      # Allows you to click a button to run it manually
+  workflow_dispatch:      # Triggered via cron-job.org or manually from GitHub Actions UI
 
 jobs:
   build:
