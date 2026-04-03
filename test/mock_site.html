@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mock Mount Madonna Reservations</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .date_option { display: inline-block; padding: 10px; margin: 5px; border: 1px solid #ccc; cursor: pointer; }
+    .date_option.closed    { background: #eee; color: #aaa; cursor: not-allowed; }
+    .date_option.check_back { background: #fff3cd; }
+    .date_option.available  { background: #d4edda; font-weight: bold; cursor: pointer; }
+    .date_option.unavailable { background: #f8d7da; }
+    .slot_container { display: inline-block; padding: 10px; margin: 5px; border: 1px solid #999; cursor: pointer; }
+    .slot_container:hover { background: #e0f0ff; }
+    .slot.unavailable { color: #aaa; cursor: not-allowed; }
+    #status { margin-top: 20px; padding: 10px; background: #f0f0f0; font-size: 0.9em; }
+    #confirmation { display: none; padding: 20px; background: #d4edda; }
+    #card-button { display: none; padding: 10px 20px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+<h2>Mock Reservations Page</h2>
+<p id="countdown"></p>
+
+<div id="date_picker">
+  <div class="date_option closed"     data-date="2026-04-03" data-detail-status="Closed">
+    <div class="date_day">Friday</div><div class="date_num">3</div><div class="date_month">Apr</div>
+    <div class="date_status">Closed</div>
+  </div>
+  <div class="date_option check_back" data-date="2026-04-05" data-detail-status="Next release today @ 9am">
+    <div class="date_day">Saturday</div><div class="date_num">5</div><div class="date_month">Apr</div>
+    <div class="date_status">Reserve soon</div>
+  </div>
+  <div class="date_option closed"     data-date="2026-04-06" data-detail-status="Closed">
+    <div class="date_day">Sunday</div><div class="date_num">6</div><div class="date_month">Apr</div>
+    <div class="date_status">Closed</div>
+  </div>
+</div>
+
+<div id="time_chooser"></div>
+<button id="card-button">Proceed to Payment</button>
+<div id="confirmation">Booking confirmed!</div>
+<div id="status">Waiting for release...</div>
+
+<script>
+  // Read delay from URL param ?delay=N (seconds). Default: 3.
+  var params = new URLSearchParams(window.location.search);
+  var delaySeconds = parseInt(params.get('delay') || '3', 10);
+  var targetDate = params.get('date') || '2026-04-05';
+
+  var statusEl = document.getElementById('status');
+  var countdownEl = document.getElementById('countdown');
+
+  // Countdown display
+  var remaining = delaySeconds;
+  countdownEl.textContent = 'Simulating Ably release in ' + remaining + 's...';
+  var countdownTimer = setInterval(function() {
+    remaining--;
+    countdownEl.textContent = remaining > 0
+      ? 'Simulating Ably release in ' + remaining + 's...'
+      : 'Release fired!';
+    if (remaining <= 0) clearInterval(countdownTimer);
+  }, 1000);
+
+  // === Simulate Ably WebSocket push: flip date class after delay ===
+  setTimeout(function() {
+    var dateEl = document.querySelector('.date_option[data-date="' + targetDate + '"]');
+    if (dateEl) {
+      dateEl.classList.remove('check_back', 'closed', 'unavailable');
+      dateEl.classList.add('available');
+      dateEl.setAttribute('data-detail-status', 'Reserve now');
+      dateEl.querySelector('.date_status').textContent = 'Reserve now';
+      statusEl.textContent = 'Ably fired: ' + targetDate + ' is now available';
+    }
+  }, delaySeconds * 1000);
+
+  // === Simulate AJAX slot load when date is clicked ===
+  document.getElementById('date_picker').addEventListener('click', function(e) {
+    var target = e.target.closest('.date_option');
+    if (!target || target.classList.contains('closed') || target.classList.contains('check_back')) return;
+
+    // Mark selected
+    document.querySelectorAll('.date_option').forEach(function(el) { el.classList.remove('selected'); });
+    target.classList.add('selected');
+
+    statusEl.textContent = 'Date clicked: ' + target.getAttribute('data-date') + ' — loading slots (simulated AJAX)...';
+
+    // Simulate AJAX delay before slots render
+    setTimeout(function() {
+      document.getElementById('time_chooser').innerHTML = [
+        makeSlot('slot1', '9:00',  'am', '9:00am',  false),
+        makeSlot('slot2', '11:00', 'am', '11:00am', false),
+        makeSlot('slot3', '1:00',  'pm', '1:00pm',  true),   // unavailable
+        makeSlot('slot4', '3:00',  'pm', '3:00pm',  false),
+        makeSlot('slot5', '4:00',  'pm', '4:00pm',  false),
+        makeSlot('slot6', '5:00',  'pm', '5:00pm',  false),
+      ].join('');
+      statusEl.textContent = 'Slots loaded. Click a time slot.';
+
+      // === Simulate slot click → form submit ===
+      document.getElementById('time_chooser').addEventListener('click', function(e) {
+        var container = e.target.closest('.slot_container');
+        if (!container) return;
+        if (container.querySelector('.slot').classList.contains('unavailable')) return;
+
+        var time = container.getAttribute('data-time');
+        statusEl.textContent = 'Slot selected: ' + time + ' — proceeding to payment...';
+
+        // Simulate navigation to card step
+        setTimeout(function() {
+          document.getElementById('card-button').style.display = 'inline-block';
+          statusEl.textContent = 'Card step loaded. #card-button is visible.';
+        }, 300);
+      });
+    }, 300);
+  });
+
+  function makeSlot(num, time, ap, timeData, unavailable) {
+    var cls = 'slot ' + num + (unavailable ? ' unavailable' : '');
+    return '<div class="slot_container" data-time="' + timeData + '">' +
+           '  <div class="' + cls + '">' +
+           '    <div class="time">' + time + ' <span>' + ap + '</span></div>' +
+           '  </div>' +
+           '</div>';
+  }
+</script>
+</body>
+</html>

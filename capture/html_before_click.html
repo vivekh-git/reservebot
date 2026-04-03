@@ -1,0 +1,374 @@
+<!DOCTYPE html><html><head>
+    <title>Mount Madonna Center Reservations</title>
+    <meta name="csrf-param" content="authenticity_token">
+<meta name="csrf-token" content="BMzIA5r8nCz8DflwX9jGUsB97-V6jD39QBtxcbmr7Up5zYi-MwGWb0A8WCIOnh--eLsjxF7YoHS9fkUb9Qiw2g">
+
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap-theme.min.css" rel="stylesheet">
+    <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.2/css/bootstrap-select.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://www.hanumanfellowship.org/assets/css/mount-madonna.min.css" rel="stylesheet">
+    <script src="https://browser.sentry-cdn.com/8.55.1/bundle.tracing.replay.min.js" crossorigin="anonymous"></script><script src="https://js.sentry-cdn.com/795503e7bb862e68099e1578c5a7af6c.min.js" crossorigin="anonymous"></script>
+    <script>
+      Sentry.onLoad(function() {
+        Sentry.init({
+          enabled: true,
+        });
+      });
+    </script>
+    <script src="https://cdn.ably.io/lib/ably.min-1.js"></script>
+      <script type="text/javascript" src="https://js.stripe.com/v3/"></script>
+  <script type="text/javascript">
+    var stripe = Stripe("pk_live_n31B5r1y0q0QMvLfeAqMmTNH00amiaUNQ2");
+  </script>
+
+    <link rel="stylesheet" href="/assets/application-9ee1a09781f12653a55ff58d6f8edd3b971982eb03ed8f32d7e9e3c7f7fa67c8.css" media="all">
+    <script src="/assets/application-bbce05cb5981968033346c89f2a6e1e2a3814da4a0f45dbfa5a622358f659715.js"></script><style type="text/css"></style>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/js/bootstrap.min.js"></script>
+
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/favicon-16x16.png" sizes="16x16">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#4e2222">
+    <meta name="theme-color" content="#f7cb8d">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Montserrat:wght@400;500;600;700&amp;family=Open+Sans:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet">
+    <!-- Google tag (gtag.js) -->
+    <script async="" src="https://www.googletagmanager.com/gtag/js?id=G-XCHQ1ZB6TF"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+    
+        gtag('config', 'G-XCHQ1ZB6TF', {
+          'user_id': '5081'
+        });
+    </script>
+
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">  <meta name="sentry-trace" content="5bb5909ffbd2436eaeca6941952f2051-4f8d58a6a7e64692-1">
+<meta name="baggage" content="sentry-trace_id=5bb5909ffbd2436eaeca6941952f2051,sentry-sample_rate=1.0,sentry-sampled=true,sentry-environment=production,sentry-release=18787196950dee28c25f41c902e575bb7cb2336e,sentry-public_key=5b85c138cccefce15f003a045c125c14">
+  <style>.fluidvids {width: 100%; max-width: 100%; position: relative;}.fluidvids-item {position: absolute; top: 0px; left: 0px; width: 100%; height: 100%;}</style></head>
+  <body class="landing default bg-teal">
+    <div id="head-wrapper" class="sub_page">
+  <header class="js-nav-main nav-main right-align absolute z3 top-0 left-0 full-width">
+    <div class="break5-hide nav-main__logo-outter absolute z3 left-0 ml-3">
+      <span class="small-h1">MMC Reservations</span>
+      <div class="container">
+        <div class="col col-12">
+
+          <a href="https://www.mountmadonna.org/" class="nav-main__logo-container fill-white fill-white--dark--hover block z2">
+            <img alt="Mount Madonna Center" class="mm-logo" src="/assets/mm-logo-d64b280f9201c2660008eb42936472e686a25f1ed0c2bdb09b13446eb3eb61cc.png">
+
+          </a>
+
+        </div>
+      </div>
+    </div>
+    <div class="nav-main__trigger-container z2 my-4">
+      <div class="container">
+
+        <div class="white col col-12">
+          <button class="js-nav-main--trigger nav-main__trigger button button--small button--transparent">
+            <span class="nav-main__trigger__hamburger">
+              <span class="nav-main__trigger__hamburger__filling--1"></span>
+              <span class="nav-main__trigger__hamburger__filling--2"></span>
+              <span class="nav-main__trigger__hamburger__filling--3"></span>
+              <span class="nav-main__trigger__hamburger__filling--4"></span>
+            </span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+    <nav class="nav-main__container white flex flex-wrap row m-0">
+      <div class="nav-main__upper right-align full-width overflow-visible" style="padding: 0.5em 0; background-color: #4e2222;">
+        <div class="small z2 container">
+          <div class="break5-show absolute z2 top-0 left-0 col">
+            <a href="https://www.mountmadonna.org/" class="nav-main__logo-container fill-white fill-white--dark--hover block z2">
+              <img alt="Mount Madonna Center" class="mm-logo" src="/assets/mm-logo-d64b280f9201c2660008eb42936472e686a25f1ed0c2bdb09b13446eb3eb61cc.png">
+
+            </a>
+          </div>
+          <div class="flex flex-wrap justify-end items-center col col-12 nav-links-container">
+  <a class="nav-main__link nav-main__link--upper fstyle-normal sans-serif bold z1 px-2 md-px-3 lg-px-4" style="color: white; text-decoration: none;" href="/">Home</a>
+  <a class="nav-main__link nav-main__link--upper fstyle-normal sans-serif bold z1 px-2 md-px-3 lg-px-4" style="color: white; text-decoration: none;" href="/faq">FAQ</a>
+  <a class="nav-main__link nav-main__link--upper fstyle-normal sans-serif bold z1 px-2 md-px-3 lg-px-4" style="color: white; text-decoration: none;" href="/reservations/new">Reserve</a>
+
+</div>
+
+        </div>
+      </div>
+    </nav>
+  </header>
+</div>
+
+<main class="bg-offWhite sub_page" role="main">
+<section class="hero white center table full-width bg-teal--dark overflow-hidden">
+  <div class="absolute z1 trbl-0 bg-loading" style="background-color: transparent;">
+    <div class="b-lazy absolute z1 trbl-0 bg-center bg-cover bg-no-repeat b-loaded" style="background-image: url('https://reservations.mountmadonna.org/assets/hero-d6cb94a772a1cfe8678f318b9de005609f483c7f98de2595aaa980f170d27508.jpg')"></div>
+    <div class="absolute z2 trbl-0 bg-black opacity-50"></div>
+  </div>
+  <div class="table-cell z2 full-width va-middle">
+    <div class="container mt-5 sm-mt-6">
+      <div class="col col-12">
+        <h1 class="h2 sm-h1 text-shadow m-0">Temple Darshan Reservations</h1>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+    <section class="py-5 sm-py-6">
+      <div class="border__repeat absolute z1 top-0 left-0 full-width "></div>
+      <div class="sm-p-6 p-0">
+        <div style="max-width: 750px; margin: 0 auto">
+          <div class="content" id="form">
+<div class="welcome">
+<div id="user_image"><img src="https://www.mountmadonna.org/Gif/default_user_icon.png" width="50" height="50"></div>
+<p>
+Welcome Vivek!
+<br>
+<span class="logout"><a rel="nofollow" data-method="delete" href="/visitors/logout">Not you?</a></span>
+</p>
+</div>
+<div aria-hidden="true" aria-labelledby="myLargeModalLabel" class="modal fade" id="cancel_confirmation" role="dialog" tabindex="-1">
+<div class="modal-dialog modal-sm">
+<div class="modal-content">
+<div class="modal-body">
+<p>
+<b>Cancel this reservation?</b>
+</p>
+</div>
+<div class="modal-footer">
+<button class="btn btn-default" data-dismiss="modal" type="button">Keep It</button>
+<button class="btn btn-primary btn-danger confirm_cancel" type="button">Cancel It</button>
+</div>
+</div>
+</div>
+</div>
+
+
+<div class="panel panel-default">
+<div class="panel-body display-flex" id="reservation-details">
+<div class="col col-sm-6 col-xs-12 my-5">
+<div id="one-car-diagram">
+<i class="fa fa-car my-4 mr-3"></i>
+<span>x</span>
+<div class="num">1</div>
+</div>
+</div>
+<div class="col col-sm-6 col-xs-12">
+<div id="one-car-text">
+<div style="font-size: 0.9em">This reservation is for</div>
+<div style="font-size: 1.5em; line-height: 1em">One Car Only</div>
+<div style="font-size: 0.9em; margin-top: 1.5em; line-height: 1em;">A Voluntary Parking Fee</div>
+<div style="font-size: 0.7em">will be requested in the next step</div>
+</div>
+</div>
+<!-- end row -->
+</div>
+<!-- end panel-body -->
+</div>
+<!-- end panel -->
+<form class="ajax_form" id="new_reservation" action="/reservations" accept-charset="UTF-8" data-remote="true" method="post"><input id="reservation_amount_field" autocomplete="off" type="hidden" name="reservation[amount]">
+<div id="errors"></div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<p>
+<strong>
+<i class="fa fa-calendar"></i>
+Reservation Time
+</strong>
+</p>
+</div>
+<div class="panel-body form-group center" id="select-date-and-time">
+<span class="errorMessage"></span>
+<div id="date_picker">
+<div class="date_option closed" data-date="2026-04-03" data-detail-status="Closed" data-disabled="">
+<div class="date_day">Friday</div>
+<div class="date_num">3</div>
+<div class="date_month">Apr</div>
+<div class="date_status">Closed</div>
+</div>
+<div class="date_option unavailable" data-date="2026-04-04" data-detail-status="Full - No entry without reservation">
+<div class="date_day">Saturday</div>
+<div class="date_num">4</div>
+<div class="date_month">Apr</div>
+<div class="date_status">Full</div>
+</div>
+<div class="date_option closed" data-date="2026-04-05" data-detail-status="Closed" data-disabled="">
+<div class="date_day">Sunday</div>
+<div class="date_num">5</div>
+<div class="date_month">Apr</div>
+<div class="date_status">Closed</div>
+</div>
+<div class="date_option closed" data-date="2026-04-06" data-detail-status="Closed" data-disabled="">
+<div class="date_day">Monday</div>
+<div class="date_num">6</div>
+<div class="date_month">Apr</div>
+<div class="date_status">Closed</div>
+</div>
+<div class="date_option check_back" data-date="2026-04-07" data-detail-status="Next release Monday @ 9am">
+<div class="date_day">Tuesday</div>
+<div class="date_num">7</div>
+<div class="date_month">Apr</div>
+<div class="date_status">Reserve soon</div>
+</div>
+<div class="date_option closed" data-date="2026-04-08" data-detail-status="Closed" data-disabled="">
+<div class="date_day">Wednesday</div>
+<div class="date_num">8</div>
+<div class="date_month">Apr</div>
+<div class="date_status">Closed</div>
+</div>
+<div class="date_option closed" data-date="2026-04-09" data-detail-status="Closed" data-disabled="">
+<div class="date_day">Thursday</div>
+<div class="date_num">9</div>
+<div class="date_month">Apr</div>
+<div class="date_status">Closed</div>
+</div>
+
+</div>
+<input id="reservation_date" autocomplete="off" type="hidden" name="reservation[date]">
+<div class="time_divider"></div>
+<div id="selected_date_heading" style="display: none">
+<div class="selected_date_text"></div>
+<div class="selected_date_status"></div>
+</div>
+<div id="time_chooser"></div>
+<input autocomplete="off" type="hidden" name="reservation[arrival_time]" id="reservation_arrival_time">
+<script id="time_chooser_template" type="text/ractive">
+{{#if rows}}
+<div class='pt-5' id='chooser_content' outro='fade'>
+{{#if full}}
+<div id='full'>
+<div class='status_heading'>full</div>
+<div class='status_subheading'>
+<b>no entry without reservation</b>
+</div>
+</div>
+{{elseif none_left}}
+<div id='none_left'>
+{{#if timer_expired}}
+<div class='status_heading'>checking for availability...</div>
+<div class='status_subheading'>
+<i class='fa fa-refresh fa-spin'></i>
+</div>
+{{elseif before_first_release}}
+<div class='status_heading'>opening in</div>
+<div class='status_subheading'>
+{{#if days > 0}}{{days}} <span>day{{#if days > 1 }}s{{/if}}</span>{{elseif hours > 0}}{{hours}} <span>hour{{#if hours != 1}}s{{/if}}</span>{{elseif minutes > 0}}{{minutes}} <span>min</span>{{else}}{{seconds}} <span>sec</span>{{/if}}
+</div>
+{{else}}
+<div class='status_heading'>recent release complete</div>
+<div class='status_subheading'>{{as_of}}</div>
+{{#if sold_out_seconds >= 0}}
+<div class='status_subheading sold-out-time'>
+<i>(all taken in {{#if sold_out_hours > 0}}{{sold_out_hours}} hour{{#if sold_out_hours != 1}}s{{/if}}{{elseif sold_out_minutes > 0}}{{sold_out_minutes}} min{{else}}{{sold_out_seconds}} sec{{/if}})</i>
+</div>
+{{/if}}
+<div class='status_spacer'></div>
+<div class='status_heading'>more available in</div>
+<div class='status_subheading'>
+{{#if days > 0}}{{days}} <span>day{{#if days > 1 }}s{{/if}}</span>{{elseif hours > 0}}{{hours}} <span>hour{{#if hours != 1}}s{{/if}}</span>{{elseif minutes > 0}}{{minutes}} <span>min</span>{{else}}{{seconds}} <span>sec</span>{{/if}}
+</div>
+{{/if}}
+</div>
+{{elseif percent_full_for_now >= 100}}
+<div id='max_for_now'>
+<div class='status_heading'>more reservations available soon</div>
+<div class='status_subheading'>{{#if before_first_release}}first{{else}}next{{/if}} release {{next_release}}</div>
+</div>
+{{else}}
+<label class="arrival_time_label" for="reservation_arrival_time">Choose an Arrival Time</label>
+{{/if}}
+</div>
+{{/if}}
+{{#rows}}
+<div class='time_row{{#if none_left || full}} none_left{{/if}}'>
+{{#slots}}
+<div class='slot_container' data-time='{{time_data}}'>
+<div class='slot slot{{num}}{{#if unavailable || full}} unavailable{{/if}}{{#if reserved}} reserved{{/if}}'>
+<div class='bg-fill'></div>
+<div class='fill' style='width: {{#if full}}100{{else}}{{percent_full}}{{/if}}%'></div>
+<div class='time'>
+{{time}}
+<span>{{ap}}</span>
+</div>
+</div>
+<div class='spin'>
+<i class='fa fa-refresh fa-spin'></i>
+</div>
+<div class='check'>
+<i class='fa fa-check-circle'></i>
+</div>
+</div>
+{{/}}
+</div>
+{{/}}
+{{#if rows && !full && !none_left && !closed}}
+<div class='mt-5'>
+{{>release_schedule_link}}
+</div>
+{{/if}}
+{{#partial release_schedule_link}}
+<div class='my-5'>
+Reservations are released in stages, not all at once.
+<br>
+</div>
+{{/partial}}
+</script>
+</div>
+</div>
+<!-- end panel -->
+<center>
+<input type="button" value="Cancel" class="btn btn-default btn-lg" onclick="document.location.href='/'">
+<input type="submit" name="commit" value="Reserve" class="btn btn-default btn-primary btn-lg" style="display: none; margin-left: 45px" data-disable-with="Reserve">
+</center>
+</form><br>
+</div>
+<script>
+  Reservations.New({
+    reserved_days: [],
+  });
+</script>
+
+        </div>
+      </div>
+    </section>
+    </main>
+
+    <footer class="white bg-teal bg-footer">
+      <div class="sm-absolute z2 top-0 left-0 full-width border-top b2 border-white"></div>
+      <div class="sm-absolute z1 top-0 left-0 full-width bg-footer-border" style="height: 15px;"></div>
+      <div class="z2 py-5 sm-py-6 container">     <div class="flex flex-wrap col col-12">
+          <div class="order-last md-order-0 left col-12 sm-col-3">
+            <a href="https://www.mountmadonna.org/" class="footer__logo-container fill-white fill-white--dark--hover block z2">
+              <img alt="Mount Madonna Center" class="mm-logo" src="/assets/mm-logo-d64b280f9201c2660008eb42936472e686a25f1ed0c2bdb09b13446eb3eb61cc.png">
+
+            </a>
+          </div>
+        </div>
+      </div>
+      
+    </footer>
+    <div aria-hidden="true" aria-labelledby="myLargeModalLabel" class="modal fade" id="modal-alert" role="dialog" tabindex="-1">
+<div class="modal-dialog modal-sm">
+<div class="modal-content">
+<div class="modal-body">
+<p></p>
+</div>
+<div class="modal-footer">
+<button class="btn btn-default" data-dismiss="modal" type="button">Ok</button>
+</div>
+</div>
+</div>
+</div>
+
+    <script src="https://www.hanumanfellowship.org/assets/js/mount-madonna.min.js?v=0.0.2" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.12.2/js/bootstrap-select.min.js"></script>
+  
+
+<iframe name="__privateStripeController9171" frameborder="0" allowtransparency="true" scrolling="no" role="presentation" allow="payment *" src="https://js.stripe.com/v3/controller-with-preconnect-7366d87d8453f34970903940aa172b61.html#__shared_params__[version]=v3&amp;__shared_params__[light_experiment_assignments]=%7B%22token%22%3A%22bbafada5-2fa1-4ff0-be3d-c547fe15cc3f%22%2C%22assignments%22%3A%7B%22link_ewcs_prewarm_experiment_v2%22%3A%22treatment%22%2C%22react_version_17_v2%22%3A%22control%22%7D%7D&amp;apiKey=pk_live_n31B5r1y0q0QMvLfeAqMmTNH00amiaUNQ2&amp;stripeJsId=bbafada5-2fa1-4ff0-be3d-c547fe15cc3f&amp;stripeObjId=sobj-3271ee23-3d85-4584-b9f5-288eec377e48&amp;firstStripeInstanceCreatedLatency=5&amp;controllerCount=1&amp;isCheckout=false&amp;stripeJsLoadTime=1775234756004&amp;manualBrowserDeprecationRollout=false&amp;mids[guid]=NA&amp;mids[muid]=740ed622-79dc-4243-96f9-7b61bd1b0f064a53b0&amp;mids[sid]=c22c3618-ecb2-445f-a4ae-3ddad5729837a5bf91&amp;react_version_variant=control&amp;referrer=https%3A%2F%2Freservations.mountmadonna.org%2Freservations%2Fnew&amp;controllerId=__privateStripeController9171" aria-hidden="true" tabindex="-1" style="border: none !important; margin: 0px !important; padding: 0px !important; width: 1px !important; min-width: 100% !important; overflow: hidden !important; display: block !important; visibility: hidden !important; position: fixed !important; height: 1px !important; pointer-events: none !important; user-select: none !important;"></iframe></body></html>

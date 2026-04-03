@@ -47,8 +47,11 @@ sites:
         match_attribute: "data-date"
         match_value: "{target_date}"
         on_match:
+          - action: wait_for
+            selector: ".slot_container"
+
           - action: click_preferred
-            selector: ".slot.highlight"
+            selector: ".slot_container:not(:has(.slot.unavailable))"
             text_selector: ".time"
             preferred: ["4:00", "5:00", "3:00"]
 

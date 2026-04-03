@@ -31,4 +31,5 @@ jobs:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
         run: |
           echo "Workflow started at: $(TZ='America/Los_Angeles' date)"
-          python sniper.py
+          python code/sniper.py
+          echo "Workflow ended at: $(TZ='America/Los_Angeles' date)"

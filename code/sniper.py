@@ -12,6 +12,7 @@ SENDGRID_FROM = "vivekh@gmail.com"
 
 STEP_SUCCESS = "success"
 STEP_FAILURE = "failure"
+STEP_DRY_RUN = "dry_run"
 STEP_CONTINUE = None
 
 
@@ -187,50 +188,52 @@ def execute_steps(page, steps, ctx):
 def execute_poll(page, step, ctx):
     label = ctx["user"]
     is_ci = os.environ.get("CI") == "true"
-    max_polls = 180 if is_ci else 3
     selector = step["selector"]
     match_attr = step.get("match_attribute")
     match_value = resolve(step.get("match_value", ""), ctx)
     on_match_steps = step.get("on_match", [])
 
-    print(f"  [{label}] poll: selector='{selector}' {match_attr}='{match_value}' max_polls={max_polls} ({'CI' if is_ci else 'local'})")
+    # Build a precise selector so wait_for_selector targets exactly the right element.
+    # e.g. ".date_option.available[data-date='2026-04-05']"
+    if match_attr and match_value:
+        targeted = f"{selector}[{match_attr}='{match_value}']"
+    else:
+        targeted = selector
 
-    for i in range(max_polls):
-        print(f"  [{label}] Poll {i+1}/{max_polls} — URL: {page.url}")
+    # Wait up to 10 min in CI (Ably will push the class change at release time),
+    # 30 s locally. If WebSocket drops we reload and retry up to max_reloads times.
+    wait_ms = 600000 if is_ci else 30000
+    max_reloads = 3
 
+    print(f"  [{label}] poll: waiting for '{targeted}' (timeout={wait_ms}ms, max_reloads={max_reloads})")
+
+    for attempt in range(max_reloads + 1):
+        # Log current date grid state so we can see what the page sees
         try:
             page.wait_for_selector(".date_option", timeout=10000)
+            all_options = page.query_selector_all(".date_option")
+            print(f"  [{label}] Attempt {attempt+1} — date grid ({len(all_options)} options):")
+            for d in all_options:
+                print(f"    classes='{d.get_attribute('class')}' date='{d.get_attribute('data-date')}' status='{d.get_attribute('data-detail-status')}'")
         except Exception:
-            print(f"  [{label}] date grid did not render, retrying...")
-            time.sleep(1)
-            page.reload()
-            continue
+            print(f"  [{label}] Attempt {attempt+1} — date grid did not render")
 
-        all_options = page.query_selector_all(".date_option")
-        print(f"  [{label}] date_option elements ({len(all_options)} total):")
-        for d in all_options:
-            print(f"    classes='{d.get_attribute('class')}' date='{d.get_attribute('data-date')}' status='{d.get_attribute('data-detail-status')}'")
-
-        slots = page.query_selector_all(selector)
-        print(f"  [{label}] found {len(slots)} matching '{selector}'")
-
-        for slot in slots:
-            attr_val = slot.get_attribute(match_attr) if match_attr else None
-            if match_attr and attr_val != match_value:
-                continue
-
-            print(f"  [{label}] TARGET MATCHED: {match_attr}='{attr_val}' — clicking...")
-            slot.click()
+        try:
+            print(f"  [{label}] Waiting for '{targeted}' to appear in DOM (Ably will flip it)...")
+            element = page.wait_for_selector(targeted, timeout=wait_ms)
+            print(f"  [{label}] TARGET APPEARED — clicking immediately")
+            element.click()
             page.wait_for_load_state("load")
             print(f"  [{label}] after date click, URL: {page.url}")
-
             return execute_steps(page, on_match_steps, ctx)
+        except Exception as e:
+            print(f"  [{label}] Attempt {attempt+1} timed out or failed: {e}")
+            if attempt < max_reloads:
+                print(f"  [{label}] reloading page (WebSocket may have dropped) and retrying...")
+                page.reload()
+                time.sleep(1)
 
-        print(f"  [{label}] no match, waiting 1s then reloading...")
-        time.sleep(1)
-        page.reload()
-
-    print(f"  [{label}] poll exhausted — no target found")
+    print(f"  [{label}] poll exhausted after {max_reloads + 1} attempts — no target found")
     return STEP_CONTINUE
 
 
@@ -253,6 +256,10 @@ def execute_click_preferred(page, step, ctx):
             text_el = slot.query_selector(text_selector) if text_selector else None
             if text_el and preferred in text_el.inner_text():
                 text = text_el.inner_text().strip()
+                if ctx.get("dry_run"):
+                    print(f"  [{label}] DRY RUN: would click preferred '{text}' — stopping before booking")
+                    ctx["booked_time"] = text
+                    return STEP_DRY_RUN
                 print(f"  [{label}] clicking preferred: '{text}'")
                 slot.click()
                 ctx["booked_time"] = text
@@ -261,6 +268,10 @@ def execute_click_preferred(page, step, ctx):
     if available:
         text_el = available[0].query_selector(text_selector) if text_selector else None
         text = text_el.inner_text().strip() if text_el else "unknown"
+        if ctx.get("dry_run"):
+            print(f"  [{label}] DRY RUN: would click first available '{text}' — stopping before booking")
+            ctx["booked_time"] = text
+            return STEP_DRY_RUN
         print(f"  [{label}] no preferred match, clicking first available: '{text}'")
         available[0].click()
         ctx["booked_time"] = text
@@ -270,7 +281,7 @@ def execute_click_preferred(page, step, ctx):
     return STEP_FAILURE
 
 
-def run_site(site_config, user, password, target_date):
+def run_site(site_config, user, password, target_date, dry_run=False):
     name = site_config["name"]
     is_ci = os.environ.get("CI") == "true"
     ctx = {
@@ -278,6 +289,7 @@ def run_site(site_config, user, password, target_date):
         "password": password,
         "target_date": target_date,
         "booked_time": "unknown",
+        "dry_run": dry_run,
     }
 
     print(f"[{user}] Starting '{name}' — target_date: {target_date}")
@@ -289,7 +301,9 @@ def run_site(site_config, user, password, target_date):
         browser.close()
 
     if not ctx.get("email_sent"):
-        if result == STEP_SUCCESS:
+        if result == STEP_DRY_RUN:
+            print(f"[{user}] DRY RUN complete — would have booked {target_date} at {ctx['booked_time']} on {name}. No booking made.")
+        elif result == STEP_SUCCESS:
             send_email(
                 f"Reservation booked — {name} ({user})",
                 f"Successfully booked {target_date} at {ctx['booked_time']} for {user} on {name}.",
@@ -311,9 +325,11 @@ def load_target_date(args):
 
 
 if __name__ == "__main__":
+    _here = os.path.dirname(os.path.abspath(__file__))
     parser = argparse.ArgumentParser(description="Generic reservation sniper bot")
     parser.add_argument("--date", help="Target date (YYYY-MM-DD)")
-    parser.add_argument("--config", default="sites.yaml", help="Path to sites config (default: sites.yaml)")
+    parser.add_argument("--config", default=os.path.join(_here, "sites.yaml"), help="Path to sites config (default: sites.yaml next to sniper.py)")
+    parser.add_argument("--dry-run", action="store_true", help="Find available slot and log what would be booked, but do not complete the booking")
     args = parser.parse_args()
 
     target_date = load_target_date(args)
@@ -327,7 +343,7 @@ if __name__ == "__main__":
             user = os.environ.get(cred["user_env"])
             password = os.environ.get(cred["pass_env"])
             if user and password:
-                p = multiprocessing.Process(target=run_site, args=(site, user, password, target_date))
+                p = multiprocessing.Process(target=run_site, args=(site, user, password, target_date, args.dry_run))
                 processes.append(p)
 
     if not processes:
