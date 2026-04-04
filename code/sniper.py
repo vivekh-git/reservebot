@@ -13,6 +13,7 @@ SENDGRID_FROM = "vivekh@gmail.com"
 STEP_SUCCESS = "success"
 STEP_FAILURE = "failure"
 STEP_DRY_RUN = "dry_run"
+STEP_NOT_FOUND = "not_found"
 STEP_CONTINUE = None
 
 
@@ -234,7 +235,7 @@ def execute_poll(page, step, ctx):
                 time.sleep(1)
 
     print(f"  [{label}] poll exhausted after {max_reloads + 1} attempts — no target found")
-    return STEP_CONTINUE
+    return STEP_NOT_FOUND
 
 
 def execute_click_preferred(page, step, ctx):
@@ -308,10 +309,15 @@ def run_site(site_config, user, password, target_date, dry_run=False):
                 f"Reservation booked — {name} ({user})",
                 f"Successfully booked {target_date} at {ctx['booked_time']} for {user} on {name}.",
             )
+        elif result == STEP_NOT_FOUND:
+            send_email(
+                f"No slot available — {name} ({user})",
+                f"Ran workflow for {target_date} on {name} — no available slots found for {user}.",
+            )
         elif result == STEP_FAILURE:
             send_email(
-                f"No reservation found — {name} ({user})",
-                f"Ran workflow for {target_date} on {name} — no available slots found for {user}.",
+                f"Workflow failed — {name} ({user})",
+                f"Workflow for {target_date} on {name} encountered an error for {user}.",
             )
 
 
