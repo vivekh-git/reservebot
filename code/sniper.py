@@ -40,12 +40,7 @@ def send_email(subject, body):
 
 def next_target_date():
     today = date.today()
-    test_target = date(2026, 4, 7)
-    if today <= test_target:
-        return str(test_target)
-    if today.weekday() in (5, 6):  # Saturday=5, Sunday=6
-        return str(today)
-    days_ahead = (5 - today.weekday()) % 7  # next Saturday
+    days_ahead = (5 - today.weekday()) % 7  # 0 if today is Saturday
     return str(today + timedelta(days=days_ahead))
 
 
