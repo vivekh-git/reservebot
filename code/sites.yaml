@@ -73,7 +73,9 @@ sites:
           - action: click
             selector: "#card-button"
 
-          - action: wait_for_load
+          - action: wait_for_url
+            url: "**/reservations/confirmation**"
+            timeout: 15000
 
           - action: assert_url
             url: "https://reservations.mountmadonna.org/reservations/confirmation"

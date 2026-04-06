@@ -105,7 +105,7 @@ def execute_step(page, step, ctx):
     elif action == "assert_url":
         url = resolve(step["url"], ctx)
         print(f"  [{label}] -> assert on '{url}' (current: {page.url})")
-        if page.url == url:
+        if page.url == url or page.url.startswith(url):
             print(f"  [{label}] -> {step.get('success', 'URL confirmed')}")
             return STEP_SUCCESS
         else:
