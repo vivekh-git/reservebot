@@ -171,12 +171,13 @@ def execute_step(page, step, ctx):
 
 def execute_steps(page, steps, ctx):
     is_ci = os.environ.get("CI") == "true"
+    no_pause = ctx.get("no_pause", False)
     for step in steps:
         label = ctx["user"]
         print(f"\n[{label}] ── step: {step['action']} ──────────────────────────────")
         result = execute_step(page, step, ctx)
         print(f"[{label}] URL after step: {page.url}")
-        if not is_ci and step.get("action") not in ("pause", "wait_for", "wait_for_load", "wait_for_url"):
+        if not is_ci and not no_pause and step.get("action") not in ("pause", "wait_for", "wait_for_load", "wait_for_url"):
             print(f"[{label}] [local] pausing for inspection...")
             page.pause()
         if result is not STEP_CONTINUE:
@@ -280,7 +281,7 @@ def execute_click_preferred(page, step, ctx):
     return STEP_FAILURE
 
 
-def run_site(site_config, user, password, target_date, dry_run=False):
+def run_site(site_config, user, password, target_date, dry_run=False, no_pause=False):
     name = site_config["name"]
     is_ci = os.environ.get("CI") == "true"
     ctx = {
@@ -289,6 +290,7 @@ def run_site(site_config, user, password, target_date, dry_run=False):
         "target_date": target_date,
         "booked_time": "unknown",
         "dry_run": dry_run,
+        "no_pause": no_pause,
     }
 
     print(f"[{user}] Starting '{name}' — target_date: {target_date}")
@@ -334,6 +336,7 @@ if __name__ == "__main__":
     parser.add_argument("--date", help="Target date (YYYY-MM-DD)")
     parser.add_argument("--config", default=os.path.join(_here, "sites.yaml"), help="Path to sites config (default: sites.yaml next to sniper.py)")
     parser.add_argument("--dry-run", action="store_true", help="Find available slot and log what would be booked, but do not complete the booking")
+    parser.add_argument("--no-pause", action="store_true", help="Skip between-step pauses in local mode (browser still opens visibly)")
     args = parser.parse_args()
 
     target_date = load_target_date(args)
@@ -347,7 +350,7 @@ if __name__ == "__main__":
             user = os.environ.get(cred["user_env"])
             password = os.environ.get(cred["pass_env"])
             if user and password:
-                p = multiprocessing.Process(target=run_site, args=(site, user, password, target_date, args.dry_run))
+                p = multiprocessing.Process(target=run_site, args=(site, user, password, target_date, args.dry_run, args.no_pause))
                 processes.append(p)
 
     if not processes:
