@@ -62,44 +62,6 @@
     if (remaining <= 0) clearInterval(countdownTimer);
   }, 1000);
 
-  // === Fake Ably SDK — activated by ?ably=1 ===
-  // Sets window.Ably so the _ABLY_INIT_SCRIPT interceptor can patch it,
-  // then simulates the lifecycle: initialized → connecting → connected,
-  // and subscribes to a channel exactly as the real site does.
-  if (params.get('ably') === '1') {
-    function FakeRealtime(options) {
-      var connectionListeners = [];
-      var channels = {};
-      this.connection = {
-        on: function(fn) { connectionListeners.push(fn); }
-      };
-      this.channels = {
-        get: function(name) {
-          if (!channels[name]) {
-            channels[name] = { subscribe: function() {} };
-          }
-          return channels[name];
-        }
-      };
-      setTimeout(function() {
-        connectionListeners.forEach(function(fn) {
-          fn({ current: 'connecting', previous: 'initialized', reason: null });
-        });
-      }, 50);
-      setTimeout(function() {
-        connectionListeners.forEach(function(fn) {
-          fn({ current: 'connected', previous: 'connecting', reason: null });
-        });
-      }, 150);
-    }
-
-    window.Ably = { Realtime: FakeRealtime };
-
-    var ablyClient = new window.Ably.Realtime({ key: 'mock-key' });
-    var channel = ablyClient.channels.get('reservations');
-    channel.subscribe('date-update', function(msg) {});
-  }
-
   // === Simulate Ably WebSocket push: flip date class after delay ===
   setTimeout(function() {
     var dateEl = document.querySelector('.date_option[data-date="' + targetDate + '"]');

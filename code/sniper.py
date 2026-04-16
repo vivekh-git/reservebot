@@ -11,44 +11,6 @@ NOTIFY_EMAIL = "vivekh@gmail.com"
 SENDGRID_FROM = "vivekh@gmail.com"
 
 STEP_SUCCESS = "success"
-
-# Injected into every page before any site scripts run.
-# Intercepts window.Ably so we can log connection/subscription lifecycle events.
-_ABLY_INIT_SCRIPT = """
-(function() {
-    let _ablyValue;
-    Object.defineProperty(window, 'Ably', {
-        get() { return _ablyValue; },
-        set(val) {
-            _ablyValue = val;
-            if (!val || !val.Realtime) return;
-            const OrigRealtime = val.Realtime;
-            val.Realtime = function(...args) {
-                console.log('[ably:init] Ably.Realtime instantiated at ' + new Date().toISOString());
-                const client = new OrigRealtime(...args);
-                client.connection.on(function(stateChange) {
-                    const reason = stateChange.reason ? ' reason: ' + stateChange.reason.message : '';
-                    console.log('[ably:connection] ' + stateChange.current + ' (prev: ' + stateChange.previous + ')' + reason + ' at ' + new Date().toISOString());
-                });
-                const origGet = client.channels.get.bind(client.channels);
-                client.channels.get = function(name, ...rest) {
-                    const ch = origGet(name, ...rest);
-                    const origSub = ch.subscribe.bind(ch);
-                    ch.subscribe = function(...subArgs) {
-                        console.log('[ably:subscribe] channel=' + name + ' at ' + new Date().toISOString());
-                        return origSub(...subArgs);
-                    };
-                    return ch;
-                };
-                return client;
-            };
-            Object.assign(val.Realtime, OrigRealtime);
-            console.log('[ably:patch] Ably.Realtime patched at ' + new Date().toISOString());
-        },
-        configurable: true,
-    });
-})();
-"""
 STEP_FAILURE = "failure"
 STEP_DRY_RUN = "dry_run"
 STEP_NOT_FOUND = "not_found"
@@ -257,6 +219,32 @@ def execute_poll(page, step, ctx):
         except Exception:
             print(f"  [{label}] Attempt {attempt+1} — date grid did not render")
 
+        # Inject a MutationObserver to log any class changes Ably pushes to date_option elements.
+        # Stored as window.__domObserver so it's disconnected and re-created on each reload.
+        try:
+            page.evaluate("""
+                () => {
+                    if (window.__domObserver) window.__domObserver.disconnect();
+                    const observer = new MutationObserver(mutations => {
+                        for (const m of mutations) {
+                            if (m.attributeName === 'class') {
+                                const el = m.target;
+                                console.log('[dom:classchange] date=' + el.getAttribute('data-date') +
+                                    ' class="' + el.className + '" at ' + new Date().toISOString());
+                            }
+                        }
+                    });
+                    document.querySelectorAll('.date_option').forEach(el =>
+                        observer.observe(el, { attributes: true, attributeFilter: ['class'] })
+                    );
+                    window.__domObserver = observer;
+                    console.log('[dom:observer] watching ' + document.querySelectorAll('.date_option').length +
+                        ' date_option elements at ' + new Date().toISOString());
+                }
+            """)
+        except Exception as e:
+            print(f"  [{label}] [dom:observer] failed to inject: {e}")
+
         try:
             print(f"  [{label}] Waiting for '{targeted}' to appear in DOM (Ably will flip it)...")
             element = page.wait_for_selector(targeted, timeout=wait_ms)
@@ -347,8 +335,6 @@ def run_site(site_config, user, password, target_date, dry_run=False, no_pause=F
             ws.on("close", lambda ws: print(f"  [{user}] [ws:close] {url}"))
 
         page.on("websocket", on_websocket)
-
-        page.add_init_script(_ABLY_INIT_SCRIPT)
 
         result = execute_steps(page, site_config["steps"], ctx)
         browser.close()
