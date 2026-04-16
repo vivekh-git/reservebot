@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import multiprocessing
 import argparse
 import yaml
@@ -333,6 +334,24 @@ def run_site(site_config, user, password, target_date, dry_run=False, no_pause=F
             url = ws.url
             print(f"  [{user}] [ws:open] {url}")
             ws.on("close", lambda ws: print(f"  [{user}] [ws:close] {url}"))
+
+            def on_frame(frame):
+                try:
+                    payload = frame.get("payload", frame) if isinstance(frame, dict) else frame
+                    if isinstance(payload, bytes):
+                        return  # skip binary/MessagePack frames
+                    data = json.loads(payload)
+                    action = data.get("action")
+                    _ABLY_ACTIONS = {4: "CONNECTED", 9: "ERROR", 11: "ATTACHED", 15: "MESSAGE"}
+                    if action in _ABLY_ACTIONS:
+                        channel = data.get("channel", "")
+                        ch_str = f" channel={channel}" if channel else ""
+                        ts = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+                        print(f"  [{user}] [ws:ably:{_ABLY_ACTIONS[action]}]{ch_str} at {ts}")
+                except Exception:
+                    pass
+
+            ws.on("framereceived", on_frame)
 
         page.on("websocket", on_websocket)
 
