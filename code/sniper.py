@@ -4,13 +4,51 @@ import multiprocessing
 import argparse
 import yaml
 import requests
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from playwright.sync_api import sync_playwright
 
 NOTIFY_EMAIL = "vivekh@gmail.com"
 SENDGRID_FROM = "vivekh@gmail.com"
 
 STEP_SUCCESS = "success"
+
+# Injected into every page before any site scripts run.
+# Intercepts window.Ably so we can log connection/subscription lifecycle events.
+_ABLY_INIT_SCRIPT = """
+(function() {
+    let _ablyValue;
+    Object.defineProperty(window, 'Ably', {
+        get() { return _ablyValue; },
+        set(val) {
+            _ablyValue = val;
+            if (!val || !val.Realtime) return;
+            const OrigRealtime = val.Realtime;
+            val.Realtime = function(...args) {
+                console.log('[ably:init] Ably.Realtime instantiated at ' + new Date().toISOString());
+                const client = new OrigRealtime(...args);
+                client.connection.on(function(stateChange) {
+                    const reason = stateChange.reason ? ' reason: ' + stateChange.reason.message : '';
+                    console.log('[ably:connection] ' + stateChange.current + ' (prev: ' + stateChange.previous + ')' + reason + ' at ' + new Date().toISOString());
+                });
+                const origGet = client.channels.get.bind(client.channels);
+                client.channels.get = function(name, ...rest) {
+                    const ch = origGet(name, ...rest);
+                    const origSub = ch.subscribe.bind(ch);
+                    ch.subscribe = function(...subArgs) {
+                        console.log('[ably:subscribe] channel=' + name + ' at ' + new Date().toISOString());
+                        return origSub(...subArgs);
+                    };
+                    return ch;
+                };
+                return client;
+            };
+            Object.assign(val.Realtime, OrigRealtime);
+            console.log('[ably:patch] Ably.Realtime patched at ' + new Date().toISOString());
+        },
+        configurable: true,
+    });
+})();
+"""
 STEP_FAILURE = "failure"
 STEP_DRY_RUN = "dry_run"
 STEP_NOT_FOUND = "not_found"
@@ -188,6 +226,7 @@ def execute_steps(page, steps, ctx):
 def execute_poll(page, step, ctx):
     label = ctx["user"]
     is_ci = os.environ.get("CI") == "true"
+    print(f"  [{label}] poll: landed on reservations page at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
     selector = step["selector"]
     match_attr = step.get("match_attribute")
     match_value = resolve(step.get("match_value", ""), ctx)
@@ -202,8 +241,8 @@ def execute_poll(page, step, ctx):
 
     # Wait up to 10 min in CI (Ably will push the class change at release time),
     # 30 s locally. If WebSocket drops we reload and retry up to max_reloads times.
-    wait_ms = 600000 if is_ci else 30000
-    max_reloads = 3
+    wait_ms = 30000
+    max_reloads = 24
 
     print(f"  [{label}] poll: waiting for '{targeted}' (timeout={wait_ms}ms, max_reloads={max_reloads})")
 
@@ -298,6 +337,19 @@ def run_site(site_config, user, password, target_date, dry_run=False, no_pause=F
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=is_ci)
         page = browser.new_context().new_page()
+
+        page.on("console", lambda msg: print(f"  [{user}] [browser:{msg.type}] {msg.text}"))
+        page.on("pageerror", lambda err: print(f"  [{user}] [browser:error] {err}"))
+
+        def on_websocket(ws):
+            url = ws.url
+            print(f"  [{user}] [ws:open] {url}")
+            ws.on("close", lambda ws: print(f"  [{user}] [ws:close] {url}"))
+
+        page.on("websocket", on_websocket)
+
+        page.add_init_script(_ABLY_INIT_SCRIPT)
+
         result = execute_steps(page, site_config["steps"], ctx)
         browser.close()
 

@@ -154,6 +154,98 @@ def test_preferred_time_selected(page, mock_server):
     print(f"\nBooked time: {ctx['booked_time']}")
 
 
+def test_ably_patch_applied(mock_server, browser):
+    """
+    _ABLY_INIT_SCRIPT must log [ably:patch] when the page sets window.Ably.
+    """
+    import sniper
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    logs = []
+    pg.on("console", lambda msg: logs.append(msg.text))
+    pg.add_init_script(sniper._ABLY_INIT_SCRIPT)
+
+    pg.goto(f"{mock_server}/mock_site.html?ably=1&date=2026-04-05&delay=9999")
+    pg.wait_for_timeout(300)
+    ctx.close()
+
+    assert any("[ably:patch]" in l for l in logs), f"[ably:patch] not found in logs: {logs}"
+
+
+def test_ably_init_logged(mock_server, browser):
+    """
+    _ABLY_INIT_SCRIPT must log [ably:init] when new Ably.Realtime() is called.
+    """
+    import sniper
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    logs = []
+    pg.on("console", lambda msg: logs.append(msg.text))
+    pg.add_init_script(sniper._ABLY_INIT_SCRIPT)
+
+    pg.goto(f"{mock_server}/mock_site.html?ably=1&date=2026-04-05&delay=9999")
+    pg.wait_for_timeout(300)
+    ctx.close()
+
+    assert any("[ably:init]" in l for l in logs), f"[ably:init] not found in logs: {logs}"
+
+
+def test_ably_connection_states_logged(mock_server, browser):
+    """
+    Connection transitions (initialized → connecting → connected) must each
+    produce an [ably:connection] log line.
+    """
+    import sniper
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    logs = []
+    pg.on("console", lambda msg: logs.append(msg.text))
+    pg.add_init_script(sniper._ABLY_INIT_SCRIPT)
+
+    pg.goto(f"{mock_server}/mock_site.html?ably=1&date=2026-04-05&delay=9999")
+    pg.wait_for_timeout(400)  # enough for both 50ms and 150ms fake timeouts
+    ctx.close()
+
+    conn_logs = [l for l in logs if "[ably:connection]" in l]
+    assert any("connecting" in l for l in conn_logs), f"'connecting' missing from: {conn_logs}"
+    assert any("connected" in l for l in conn_logs), f"'connected' missing from: {conn_logs}"
+
+
+def test_ably_subscribe_logged(mock_server, browser):
+    """
+    [ably:subscribe] must be logged with channel name and ISO timestamp when
+    the site calls channel.subscribe().
+    """
+    import sniper
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    logs = []
+    pg.on("console", lambda msg: logs.append(msg.text))
+    pg.add_init_script(sniper._ABLY_INIT_SCRIPT)
+
+    pg.goto(f"{mock_server}/mock_site.html?ably=1&date=2026-04-05&delay=9999")
+    pg.wait_for_timeout(300)
+    ctx.close()
+
+    sub_logs = [l for l in logs if "[ably:subscribe]" in l]
+    assert len(sub_logs) >= 1, f"[ably:subscribe] not found in logs: {logs}"
+    assert "channel=reservations" in sub_logs[0], f"channel name missing: {sub_logs[0]}"
+    assert " at 20" in sub_logs[0], f"timestamp missing: {sub_logs[0]}"
+
+
+def test_poll_logs_landing_timestamp(page, mock_server, capsys):
+    """
+    execute_poll must print 'poll: landed on reservations page at HH:MM:SS'
+    before starting to wait for the date selector.
+    """
+    url = f"{mock_server}/mock_site.html?date=2026-04-05&delay=1"
+    run_poll(page, url, "2026-04-05")
+    captured = capsys.readouterr()
+    assert "poll: landed on reservations page at" in captured.out, (
+        f"Landing timestamp not found in output:\n{captured.out}"
+    )
+
+
 def test_no_available_date_exhausts_timeout(page, mock_server):
     """
     If the date never becomes available (no flip), poll should exhaust its
