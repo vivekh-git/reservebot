@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import json
 import multiprocessing
@@ -6,6 +7,7 @@ import argparse
 import yaml
 import requests
 from datetime import date, timedelta, datetime
+from zoneinfo import ZoneInfo
 from playwright.sync_api import sync_playwright
 
 NOTIFY_EMAIL = "vivekh@gmail.com"
@@ -45,10 +47,28 @@ def next_target_date():
     return str(today + timedelta(days=days_ahead))
 
 
+def ts():
+    return datetime.now().strftime('%H:%M:%S.%f')[:-3]
+
+
 def resolve(value, ctx):
     if not isinstance(value, str):
         return value
     return value.format(**ctx)
+
+
+def parse_release_time(status, timezone_str="America/Los_Angeles"):
+    """Parse release time from status text like 'Next release today @ 9:00am'.
+    Returns a timezone-aware datetime for today at that time, or None if not parseable."""
+    m = re.search(r'@\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm))', status, re.IGNORECASE)
+    if not m:
+        return None
+    time_str = m.group(1).replace(" ", "").lower()
+    fmt = "%I:%M%p" if ":" in time_str else "%I%p"
+    tz = ZoneInfo(timezone_str)
+    now = datetime.now(tz)
+    t = datetime.strptime(time_str, fmt)
+    return now.replace(hour=t.hour, minute=t.minute, second=0, microsecond=0)
 
 
 def execute_step(page, step, ctx):
@@ -58,65 +78,67 @@ def execute_step(page, step, ctx):
 
     if action == "navigate":
         url = resolve(step["url"], ctx)
-        print(f"  [{label}] -> {url}")
+        print(f"  [{label}] [{ts()}] -> {url}")
         page.goto(url)
 
     elif action == "wait_for":
         selector = step["selector"]
-        print(f"  [{label}] -> waiting for: '{selector}'")
+        print(f"  [{label}] [{ts()}] -> waiting for: '{selector}'")
         page.wait_for_selector(selector)
+        print(f"  [{label}] [{ts()}] -> found: '{selector}'")
 
     elif action == "wait_for_load":
-        print(f"  [{label}] -> waiting for page load")
+        print(f"  [{label}] [{ts()}] -> waiting for page load")
         page.wait_for_load_state("load")
-        print(f"  [{label}] -> URL: {page.url}")
+        print(f"  [{label}] [{ts()}] -> URL: {page.url}")
 
     elif action == "wait_for_url":
         pattern = resolve(step["url"], ctx)
         timeout = step.get("timeout", 30000)
-        print(f"  [{label}] -> waiting for URL: '{pattern}' (timeout: {timeout}ms)")
+        print(f"  [{label}] [{ts()}] -> waiting for URL: '{pattern}' (timeout: {timeout}ms)")
         page.wait_for_url(pattern, timeout=timeout)
-        print(f"  [{label}] -> URL: {page.url}")
+        print(f"  [{label}] [{ts()}] -> URL: {page.url}")
 
     elif action == "fill":
         selector = step["selector"]
         raw_value = step["value"]
         value = resolve(raw_value, ctx)
         masked = "***" if "{password}" in raw_value else value
-        print(f"  [{label}] -> filling '{selector}' with '{masked}'")
+        print(f"  [{label}] [{ts()}] -> filling '{selector}' with '{masked}'")
         page.fill(selector, value)
 
     elif action == "click":
         selector = step["selector"]
-        print(f"  [{label}] -> clicking '{selector}'")
+        print(f"  [{label}] [{ts()}] -> clicking '{selector}'")
         page.click(selector)
+        print(f"  [{label}] [{ts()}] -> clicked '{selector}'")
 
     elif action == "assert_url_not":
         url = resolve(step["url"], ctx)
-        print(f"  [{label}] -> assert not on '{url}' (current: {page.url})")
+        print(f"  [{label}] [{ts()}] -> assert not on '{url}' (current: {page.url})")
         if page.url == url:
-            print(f"  [{label}] -> FAILURE: {step.get('error', 'Unexpected URL')}")
+            print(f"  [{label}] [{ts()}] -> FAILURE: {step.get('error', 'Unexpected URL')}")
             return STEP_FAILURE
 
     elif action == "assert_url":
         url = resolve(step["url"], ctx)
-        print(f"  [{label}] -> assert on '{url}' (current: {page.url})")
+        print(f"  [{label}] [{ts()}] -> assert on '{url}' (current: {page.url})")
         if page.url == url or page.url.startswith(url):
-            print(f"  [{label}] -> {step.get('success', 'URL confirmed')}")
+            print(f"  [{label}] [{ts()}] -> {step.get('success', 'URL confirmed')}")
             return STEP_SUCCESS
         else:
-            print(f"  [{label}] -> FAILURE: expected '{url}', got '{page.url}'")
+            print(f"  [{label}] [{ts()}] -> FAILURE: expected '{url}', got '{page.url}'")
             return STEP_FAILURE
 
     elif action == "check":
         selector = step["selector"]
-        print(f"  [{label}] -> checking checkbox: '{selector}'")
+        print(f"  [{label}] [{ts()}] -> checking checkbox: '{selector}'")
         page.check(selector)
 
     elif action == "select":
         selector = step["selector"]
         value = resolve(step["value"], ctx)
-        print(f"  [{label}] -> selecting '{value}' in '{selector}'")
+        print(f"  [{label}] [{ts()}] -> selecting '{value}' in '{selector}'")
         page.select_option(selector, label=value)
 
     elif action == "extract":
@@ -132,30 +154,30 @@ def execute_step(page, step, ctx):
                 texts.append(text)
         ctx[key] = texts
         ctx[key + "_text"] = "\n".join(texts) if texts else "None found"
-        print(f"  [{label}] extracted {len(texts)} item(s) for '{key}': {texts}")
+        print(f"  [{label}] [{ts()}] extracted {len(texts)} item(s) for '{key}': {texts}")
 
     elif action == "email_report":
         subject = resolve(step["subject"], ctx)
         body = resolve(step["body"], ctx)
-        print(f"  [{label}] -> sending report email: '{subject}'")
+        print(f"  [{label}] [{ts()}] -> sending report email: '{subject}'")
         send_email(subject, body)
         ctx["email_sent"] = True
         return STEP_CONTINUE
 
     elif action == "scroll_to_bottom":
         selector = step["selector"]
-        print(f"  [{label}] -> scrolling to bottom of '{selector}'")
+        print(f"  [{label}] [{ts()}] -> scrolling to bottom of '{selector}'")
         page.eval_on_selector(selector, "el => el.scrollTop = el.scrollHeight")
 
     elif action == "pause":
-        print(f"  [{label}] -> pausing for manual inspection")
+        print(f"  [{label}] [{ts()}] -> pausing for manual inspection")
         page.pause()
 
     elif action == "if_on_url":
         url = resolve(step["url"], ctx)
-        print(f"  [{label}] -> if_on_url '{url}' (current: {page.url})")
+        print(f"  [{label}] [{ts()}] -> if_on_url '{url}' (current: {page.url})")
         if page.url == url:
-            print(f"  [{label}] -> matched, running sub-steps...")
+            print(f"  [{label}] [{ts()}] -> matched, running sub-steps...")
             return execute_steps(page, step["then"], ctx)
 
     elif action == "poll":
@@ -165,7 +187,7 @@ def execute_step(page, step, ctx):
         return execute_click_preferred(page, step, ctx)
 
     else:
-        print(f"  [{label}] -> unknown action: {action}")
+        print(f"  [{label}] [{ts()}] -> unknown action: {action}")
 
     return STEP_CONTINUE
 
@@ -175,7 +197,7 @@ def execute_steps(page, steps, ctx):
     no_pause = ctx.get("no_pause", False)
     for step in steps:
         label = ctx["user"]
-        print(f"\n[{label}] ── step: {step['action']} ──────────────────────────────")
+        print(f"\n[{label}] ── step: {step['action']} [{ts()}] ──────────────────────────────")
         result = execute_step(page, step, ctx)
         print(f"[{label}] URL after step: {page.url}")
         if not is_ci and not no_pause and step.get("action") not in ("pause", "wait_for", "wait_for_load", "wait_for_url"):
@@ -188,40 +210,58 @@ def execute_steps(page, steps, ctx):
 
 def execute_poll(page, step, ctx):
     label = ctx["user"]
-    is_ci = os.environ.get("CI") == "true"
-    print(f"  [{label}] poll: landed on reservations page at {datetime.now().strftime('%H:%M:%S.%f')[:-3]}")
+    debug = ctx.get("debug", False)
+    timezone_str = ctx.get("timezone", "America/Los_Angeles")
+    precise_reload = step.get("precise_reload", False)
+    slot_retries = step.get("slot_retries", 1)
+    print(f"  [{label}] [{ts()}] poll: landed on reservations page")
     selector = step["selector"]
     match_attr = step.get("match_attribute")
     match_value = resolve(step.get("match_value", ""), ctx)
     on_match_steps = step.get("on_match", [])
 
-    # Build a precise selector so wait_for_selector targets exactly the right element.
-    # e.g. ".date_option.available[data-date='2026-04-05']"
     if match_attr and match_value:
         targeted = f"{selector}[{match_attr}='{match_value}']"
     else:
         targeted = selector
 
-    # Wait up to 10 min in CI (Ably will push the class change at release time),
-    # 30 s locally. If WebSocket drops we reload and retry up to max_reloads times.
     wait_ms = 30000
     max_reloads = 24
 
-    print(f"  [{label}] poll: waiting for '{targeted}' (timeout={wait_ms}ms, max_reloads={max_reloads})")
+    print(f"  [{label}] [{ts()}] poll: waiting for '{targeted}' (precise_reload={precise_reload}, slot_retries={slot_retries})")
 
     for attempt in range(max_reloads + 1):
-        # Log current date grid state so we can see what the page sees
+        # Log current date grid state
         try:
             page.wait_for_selector(".date_option", timeout=10000)
             all_options = page.query_selector_all(".date_option")
-            print(f"  [{label}] Attempt {attempt+1} — date grid ({len(all_options)} options):")
+            print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid ({len(all_options)} options):")
             for d in all_options:
                 print(f"    classes='{d.get_attribute('class')}' date='{d.get_attribute('data-date')}' status='{d.get_attribute('data-detail-status')}'")
         except Exception:
-            print(f"  [{label}] Attempt {attempt+1} — date grid did not render")
+            print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
 
-        # Inject a MutationObserver to log any class changes Ably pushes to date_option elements.
-        # Stored as window.__domObserver so it's disconnected and re-created on each reload.
+        # Precise reload: if target date is check_back with a known release time, sleep until then
+        if precise_reload:
+            try:
+                target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+                if target_el:
+                    status = target_el.get_attribute("data-detail-status") or ""
+                    if "release today" in status.lower():
+                        release_dt = parse_release_time(status, timezone_str)
+                        if release_dt:
+                            tz = ZoneInfo(timezone_str)
+                            sleep_secs = (release_dt - datetime.now(tz)).total_seconds()
+                            if sleep_secs > 0:
+                                print(f"  [{label}] [{ts()}] date is check_back — sleeping {sleep_secs:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
+                                time.sleep(sleep_secs)
+                                print(f"  [{label}] [{ts()}] reloading at release time")
+                                page.reload()
+                                continue
+            except Exception as e:
+                print(f"  [{label}] [{ts()}] precise_reload error: {e}")
+
+        # Inject MutationObserver to log class changes
         try:
             page.evaluate("""
                 () => {
@@ -244,24 +284,59 @@ def execute_poll(page, step, ctx):
                 }
             """)
         except Exception as e:
-            print(f"  [{label}] [dom:observer] failed to inject: {e}")
+            print(f"  [{label}] [{ts()}] [dom:observer] failed to inject: {e}")
+
+        # In debug mode, extend timeout to 2 minutes past release time to observe Ably
+        if debug:
+            try:
+                target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+                status = (target_el.get_attribute("data-detail-status") or "") if target_el else ""
+                if "release today" in status.lower():
+                    release_dt = parse_release_time(status, timezone_str)
+                    if release_dt:
+                        tz = ZoneInfo(timezone_str)
+                        debug_until = release_dt.replace(minute=release_dt.minute + 2)
+                        wait_ms = max(wait_ms, int((debug_until - datetime.now(tz)).total_seconds() * 1000))
+                        print(f"  [{label}] [{ts()}] [debug] extended timeout to {wait_ms}ms (until {debug_until.strftime('%H:%M:%S %Z')})")
+            except Exception as e:
+                print(f"  [{label}] [{ts()}] [debug] timeout extension error: {e}")
 
         try:
-            print(f"  [{label}] Waiting for '{targeted}' to appear in DOM (Ably will flip it)...")
+            print(f"  [{label}] [{ts()}] waiting for '{targeted}'...")
             element = page.wait_for_selector(targeted, timeout=wait_ms)
-            print(f"  [{label}] TARGET APPEARED — clicking immediately")
+            print(f"  [{label}] [{ts()}] TARGET APPEARED — clicking immediately")
             element.click()
             page.wait_for_load_state("load")
-            print(f"  [{label}] after date click, URL: {page.url}")
-            return execute_steps(page, on_match_steps, ctx)
+            print(f"  [{label}] [{ts()}] after date click, URL: {page.url}")
+
+            # In debug mode, stop before booking — just log what we see
+            if debug:
+                print(f"  [{label}] [{ts()}] [debug] stopping before booking steps")
+                return STEP_DRY_RUN
+
+            # Retry slot loading without full page reload on 503/timeout
+            for slot_attempt in range(slot_retries):
+                try:
+                    result = execute_steps(page, on_match_steps, ctx)
+                    return result
+                except Exception as e:
+                    if slot_attempt < slot_retries - 1 and "/reservations/new" in page.url:
+                        print(f"  [{label}] [{ts()}] slot load failed (attempt {slot_attempt+1}/{slot_retries}), re-clicking date: {e}")
+                        el = page.query_selector(targeted)
+                        if el:
+                            el.click()
+                            page.wait_for_load_state("load")
+                            print(f"  [{label}] [{ts()}] re-clicked date, URL: {page.url}")
+                    else:
+                        raise
         except Exception as e:
-            print(f"  [{label}] Attempt {attempt+1} timed out or failed: {e}")
+            print(f"  [{label}] [{ts()}] Attempt {attempt+1} timed out or failed: {e}")
             if attempt < max_reloads:
-                print(f"  [{label}] reloading page (WebSocket may have dropped) and retrying...")
+                print(f"  [{label}] [{ts()}] reloading page and retrying...")
                 page.reload()
                 time.sleep(1)
 
-    print(f"  [{label}] poll exhausted after {max_reloads + 1} attempts — no target found")
+    print(f"  [{label}] [{ts()}] poll exhausted after {max_reloads + 1} attempts — no target found")
     return STEP_NOT_FOUND
 
 
@@ -272,7 +347,7 @@ def execute_click_preferred(page, step, ctx):
     preferred_list = step.get("preferred", [])
 
     available = page.query_selector_all(selector)
-    print(f"  [{label}] click_preferred: {len(available)} slot(s) matching '{selector}'")
+    print(f"  [{label}] [{ts()}] click_preferred: {len(available)} slot(s) matching '{selector}'")
     for slot in available:
         text_el = slot.query_selector(text_selector) if text_selector else None
         text = text_el.inner_text().strip() if text_el else "?"
@@ -309,9 +384,10 @@ def execute_click_preferred(page, step, ctx):
     return STEP_FAILURE
 
 
-def run_site(site_config, user, password, target_date, dry_run=False, no_pause=False):
+def run_site(site_config, user, password, target_date, dry_run=False, no_pause=False, debug=False):
     name = site_config["name"]
     is_ci = os.environ.get("CI") == "true"
+    timezone = site_config.get("timezone", "America/Los_Angeles")
     ctx = {
         "user": user,
         "password": password,
@@ -319,21 +395,38 @@ def run_site(site_config, user, password, target_date, dry_run=False, no_pause=F
         "booked_time": "unknown",
         "dry_run": dry_run,
         "no_pause": no_pause,
+        "debug": debug,
+        "timezone": timezone,
     }
 
-    print(f"[{user}] Starting '{name}' — target_date: {target_date}")
+    print(f"[{user}] Starting '{name}' — target_date: {target_date}" + (" [DEBUG MODE]" if debug else ""))
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=is_ci)
-        page = browser.new_context().new_page()
+        context = browser.new_context()
+        page = context.new_page()
 
-        page.on("console", lambda msg: print(f"  [{user}] [browser:{msg.type}] {msg.text}"))
-        page.on("pageerror", lambda err: print(f"  [{user}] [browser:error] {err}"))
+        page.on("console", lambda msg: print(f"  [{user}] [{ts()}] [browser:{msg.type}] {msg.text}"))
+        page.on("pageerror", lambda err: print(f"  [{user}] [{ts()}] [browser:pageerror] {err}"))
+
+        def on_response(response):
+            if debug:
+                print(f"  [{user}] [{ts()}] [http:{response.status}] {response.url}")
+            elif response.status in (429, 503):
+                print(f"  [{user}] [{ts()}] [http:{response.status}] {response.url}")
+
+        def on_request(request):
+            if debug:
+                print(f"  [{user}] [{ts()}] [req:{request.method}] {request.url}")
+
+        # Register on context to capture responses from all frames including cross-origin iframes
+        context.on("response", on_response)
+        context.on("request", on_request)
 
         def on_websocket(ws):
             url = ws.url
-            print(f"  [{user}] [ws:open] {url}")
-            ws.on("close", lambda ws: print(f"  [{user}] [ws:close] {url}"))
+            print(f"  [{user}] [{ts()}] [ws:open] {url}")
+            ws.on("close", lambda ws: print(f"  [{user}] [{ts()}] [ws:close] {url}"))
 
             def on_frame(frame):
                 try:
@@ -341,13 +434,15 @@ def run_site(site_config, user, password, target_date, dry_run=False, no_pause=F
                     if isinstance(payload, bytes):
                         return  # skip binary/MessagePack frames
                     data = json.loads(payload)
+                    if debug:
+                        print(f"  [{user}] [{ts()}] [ws:frame] {json.dumps(data)}")
+                        return
                     action = data.get("action")
                     _ABLY_ACTIONS = {4: "CONNECTED", 9: "ERROR", 11: "ATTACHED", 15: "MESSAGE"}
                     if action in _ABLY_ACTIONS:
                         channel = data.get("channel", "")
                         ch_str = f" channel={channel}" if channel else ""
-                        ts = datetime.now().strftime('%H:%M:%S.%f')[:-3]
-                        print(f"  [{user}] [ws:ably:{_ABLY_ACTIONS[action]}]{ch_str} at {ts}")
+                        print(f"  [{user}] [{ts()}] [ws:ably:{_ABLY_ACTIONS[action]}]{ch_str}")
                 except Exception:
                     pass
 
@@ -394,6 +489,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", default=os.path.join(_here, "sites.yaml"), help="Path to sites config (default: sites.yaml next to sniper.py)")
     parser.add_argument("--dry-run", action="store_true", help="Find available slot and log what would be booked, but do not complete the booking")
     parser.add_argument("--no-pause", action="store_true", help="Skip between-step pauses in local mode (browser still opens visibly)")
+    parser.add_argument("--debug", action="store_true", help="Extended logging of all requests, responses, and WS payloads. Waits 2min past release time. Does not book.")
     args = parser.parse_args()
 
     target_date = load_target_date(args)
@@ -407,7 +503,7 @@ if __name__ == "__main__":
             user = os.environ.get(cred["user_env"])
             password = os.environ.get(cred["pass_env"])
             if user and password:
-                p = multiprocessing.Process(target=run_site, args=(site, user, password, target_date, args.dry_run, args.no_pause))
+                p = multiprocessing.Process(target=run_site, args=(site, user, password, target_date, args.dry_run, args.no_pause, args.debug))
                 processes.append(p)
 
     if not processes:

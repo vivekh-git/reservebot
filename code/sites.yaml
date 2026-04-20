@@ -1,5 +1,6 @@
 sites:
   - name: "Mount Madonna"
+    timezone: "America/Los_Angeles"
     credentials:
       - user_env: MY_USER_1
         pass_env: MY_PASS_1
@@ -46,6 +47,8 @@ sites:
         selector: ".date_option.available"
         match_attribute: "data-date"
         match_value: "{target_date}"
+        precise_reload: true
+        slot_retries: 3
         on_match:
           - action: wait_for
             selector: ".slot_container"

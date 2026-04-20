@@ -2,6 +2,17 @@ name: Daily Reservation Sniper
 
 on:
   workflow_dispatch:      # Triggered via cron-job.org or manually from GitHub Actions UI
+    inputs:
+      debug:
+        description: 'Enable debug mode (logs all requests/responses/WS payloads, waits 2min past release, no booking)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+      date:
+        description: 'Target date override (YYYY-MM-DD), leave blank for default'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -31,5 +42,11 @@ jobs:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
         run: |
           echo "Workflow started at: $(TZ='America/Los_Angeles' date)"
-          python code/sniper.py
+          TODAY=$(TZ='America/Los_Angeles' date +%Y-%m-%d)
+          ARGS=""
+          [ "${{ github.event.inputs.debug }}" = "true" ] && ARGS="$ARGS --debug"
+          [ -n "${{ github.event.inputs.date }}" ] && ARGS="$ARGS --date ${{ github.event.inputs.date }}"
+          # Auto debug mode on 2026-04-21: observe Ably at release time without booking
+          [ "$TODAY" = "2026-04-21" ] && ARGS="$ARGS --debug --date 2026-04-21"
+          python code/sniper.py $ARGS
           echo "Workflow ended at: $(TZ='America/Los_Angeles' date)"
