@@ -242,6 +242,16 @@ def execute_poll(page, step, ctx):
         except Exception:
             print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
 
+        # If target date is already unavailable/full, no point retrying
+        if match_value:
+            try:
+                target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+                if target_el and "unavailable" in (target_el.get_attribute("class") or ""):
+                    print(f"  [{label}] [{ts()}] target date {match_value} is unavailable — stopping")
+                    return STEP_NOT_FOUND
+            except Exception:
+                pass
+
         # Precise reload: if target date is check_back with a known release time, sleep until then
         if precise_reload:
             try:
