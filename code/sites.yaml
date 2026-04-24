@@ -56,7 +56,8 @@ sites:
           - action: click_preferred
             selector: ".slot_container:not(:has(.slot.unavailable))"
             text_selector: ".time"
-            preferred: ["4:00", "5:00", "3:00"]
+            strict: true
+            preferred: ["3:00", "3:30", "4:00", "4:30", "5:00", "5:30", "2:30", "2:00", "1:30", "1:00", "12:30", "12:00", "11:30", "11:00"]
 
           - action: wait_for
             selector: "#card-button"

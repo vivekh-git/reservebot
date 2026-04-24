@@ -345,6 +345,7 @@ def execute_click_preferred(page, step, ctx):
     selector = step["selector"]
     text_selector = step.get("text_selector", "")
     preferred_list = step.get("preferred", [])
+    strict = step.get("strict", False)
 
     available = page.query_selector_all(selector)
     print(f"  [{label}] [{ts()}] click_preferred: {len(available)} slot(s) matching '{selector}'")
@@ -369,6 +370,9 @@ def execute_click_preferred(page, step, ctx):
                 return STEP_CONTINUE
 
     if available:
+        if strict:
+            print(f"  [{label}] no preferred match — strict mode, skipping non-preferred slots")
+            return STEP_NOT_FOUND
         text_el = available[0].query_selector(text_selector) if text_selector else None
         text = text_el.inner_text().strip() if text_el else "unknown"
         if ctx.get("dry_run"):
