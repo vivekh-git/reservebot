@@ -354,17 +354,23 @@ def execute_poll(page, step, ctx):
                             return result
                         slot_selected = True
                         # Phase 2: wait for server to resolve — no arbitrary timeout
-                        print(f"  [{label}] [{ts()}] slot clicked — waiting for server to resolve '{card_button_selector}' (no timeout)")
+                        # Success: card_button_selector becomes visible. Failure: target date becomes unavailable.
+                        print(f"  [{label}] [{ts()}] slot clicked — waiting for '{card_button_selector}' or date unavailable (no timeout)")
                         page.wait_for_function(
-                            f"() => !!document.querySelector('{card_button_selector}') || !document.querySelector('.slot_container.active.reserving')",
+                            f"() => {{"
+                            f"  var el = document.querySelector('{card_button_selector}');"
+                            f"  return (!!el && el.offsetWidth > 0) ||"
+                            f"         !!document.querySelector('.date_option.unavailable[data-date=\"{match_value}\"]');"
+                            f"}}",
                             timeout=0
                         )
-                        if page.query_selector(card_button_selector):
+                        card_el = page.query_selector(card_button_selector)
+                        if card_el and card_el.is_visible():
                             print(f"  [{label}] [{ts()}] '{card_button_selector}' appeared — completing booking")
                             return execute_steps(page, booking_steps, ctx)
                         else:
-                            print(f"  [{label}] [{ts()}] slot exited 'active reserving' without '{card_button_selector}' — slot was lost")
-                            raise Exception(f"slot released without {card_button_selector} appearing")
+                            print(f"  [{label}] [{ts()}] date became unavailable — slot was lost")
+                            raise Exception(f"date became unavailable without {card_button_selector} appearing")
                     else:
                         # Legacy: run all on_match steps as before
                         return execute_steps(page, on_match_steps, ctx)
