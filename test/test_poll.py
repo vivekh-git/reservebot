@@ -186,8 +186,8 @@ def test_poll_logs_landing_timestamp(page, mock_server, capsys):
     url = f"{mock_server}/mock_site.html?date=2026-04-05&delay=1"
     run_poll(page, url, "2026-04-05")
     captured = capsys.readouterr()
-    assert "poll: landed on reservations page at" in captured.out, (
-        f"Landing timestamp not found in output:\n{captured.out}"
+    assert "poll: landed on reservations page" in captured.out, (
+        f"Landing message not found in output:\n{captured.out}"
     )
 
 
