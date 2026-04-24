@@ -83,8 +83,9 @@ def execute_step(page, step, ctx):
 
     elif action == "wait_for":
         selector = step["selector"]
-        print(f"  [{label}] [{ts()}] -> waiting for: '{selector}'")
-        page.wait_for_selector(selector)
+        timeout = step.get("timeout", 30000)
+        print(f"  [{label}] [{ts()}] -> waiting for: '{selector}' (timeout: {timeout}ms)")
+        page.wait_for_selector(selector, timeout=timeout)
         print(f"  [{label}] [{ts()}] -> found: '{selector}'")
 
     elif action == "wait_for_load":
@@ -314,13 +315,46 @@ def execute_poll(page, step, ctx):
                 print(f"  [{label}] [{ts()}] [debug] stopping before booking steps")
                 return STEP_DRY_RUN
 
-            # Retry slot loading without full page reload on 503/timeout
+            # Split on_match at card_button_selector so execute_poll owns the full booking lifecycle
+            card_button_selector = step.get("card_button_selector")
+            if card_button_selector:
+                split_idx = next(
+                    (i for i, s in enumerate(on_match_steps)
+                     if s.get("action") == "wait_for" and s.get("selector") == card_button_selector),
+                    None
+                )
+                slot_steps = on_match_steps[:split_idx] if split_idx is not None else on_match_steps
+                booking_steps = on_match_steps[split_idx + 1:] if split_idx is not None else []
+            else:
+                slot_steps = None  # fall through to legacy path
+
             for slot_attempt in range(slot_retries):
+                slot_selected = False
                 try:
-                    result = execute_steps(page, on_match_steps, ctx)
-                    return result
+                    if slot_steps is not None:
+                        # Phase 1: select slot (re-clickable on failure)
+                        result = execute_steps(page, slot_steps, ctx)
+                        if result is not STEP_CONTINUE:
+                            return result
+                        slot_selected = True
+                        # Phase 2: wait for server to resolve — no arbitrary timeout
+                        print(f"  [{label}] [{ts()}] slot clicked — waiting for server to resolve '{card_button_selector}' (no timeout)")
+                        page.wait_for_function(
+                            f"() => !!document.querySelector('{card_button_selector}') || !document.querySelector('.slot_container.active.reserving')",
+                            timeout=0
+                        )
+                        if page.query_selector(card_button_selector):
+                            print(f"  [{label}] [{ts()}] '{card_button_selector}' appeared — completing booking")
+                            return execute_steps(page, booking_steps, ctx)
+                        else:
+                            print(f"  [{label}] [{ts()}] slot exited 'active reserving' without '{card_button_selector}' — slot was lost")
+                            raise Exception(f"slot released without {card_button_selector} appearing")
+                    else:
+                        # Legacy: run all on_match steps as before
+                        return execute_steps(page, on_match_steps, ctx)
                 except Exception as e:
-                    if slot_attempt < slot_retries - 1 and "/reservations/new" in page.url:
+                    if not slot_selected and slot_attempt < slot_retries - 1 and "/reservations/new" in page.url:
+                        # Only re-click when slot selection failed — not when server already has our request
                         print(f"  [{label}] [{ts()}] slot load failed (attempt {slot_attempt+1}/{slot_retries}), re-clicking date: {e}")
                         el = page.query_selector(targeted)
                         if el:
