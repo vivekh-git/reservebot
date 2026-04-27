@@ -403,12 +403,25 @@ def execute_click_preferred(page, step, ctx):
     preferred_list = step.get("preferred", [])
     strict = step.get("strict", False)
 
-    available = page.query_selector_all(selector)
-    print(f"  [{label}] [{ts()}] click_preferred: {len(available)} slot(s) matching '{selector}'")
-    for slot in available:
+    all_slots = page.query_selector_all(".slot_container")
+    pref_avail = pref_unavail = nonpref_avail = nonpref_unavail = 0
+    for slot in all_slots:
         text_el = slot.query_selector(text_selector) if text_selector else None
         text = text_el.inner_text().strip() if text_el else "?"
-        print(f"    slot: '{text}' classes='{slot.get_attribute('class')}'")
+        inner = slot.query_selector(".slot")
+        inner_classes = inner.get_attribute("class") if inner else ""
+        is_unavailable = "unavailable" in (inner_classes or "")
+        is_preferred = any(p in text for p in preferred_list)
+        status = "unavailable" if is_unavailable else "available"
+        pref_label = "preferred" if is_preferred else "non-preferred"
+        print(f"    slot: '{text}' {pref_label} {status} classes='{inner_classes}'")
+        if is_preferred and is_unavailable:     pref_unavail += 1
+        elif is_preferred:                      pref_avail += 1
+        elif is_unavailable:                    nonpref_unavail += 1
+        else:                                   nonpref_avail += 1
+    print(f"  [{label}] [{ts()}] preferred: {pref_avail} available, {pref_unavail} unavailable | non-preferred: {nonpref_avail} available, {nonpref_unavail} unavailable")
+
+    available = page.query_selector_all(selector)
 
     for preferred in preferred_list:
         print(f"  [{label}] checking preferred: '{preferred}'")
