@@ -231,52 +231,62 @@ def execute_poll(page, step, ctx):
 
     print(f"  [{label}] [{ts()}] poll: waiting for '{targeted}' (precise_reload={precise_reload}, slot_retries={slot_retries})")
 
+    fast_path = False
     for attempt in range(max_reloads + 1):
-        # Log current date grid state
-        try:
-            page.wait_for_selector(".date_option", timeout=10000)
-            all_options = page.query_selector_all(".date_option")
-            print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid ({len(all_options)} options):")
-            for d in all_options:
-                print(f"    classes='{d.get_attribute('class')}' date='{d.get_attribute('data-date')}' status='{d.get_attribute('data-detail-status')}'")
-        except Exception:
-            print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
-
-        # Stop early if target date is unavailable or check_back on a future date
-        if match_value:
+        if fast_path:
+            # After a precise_reload, skip diagnostics — just wait for the page then click
+            fast_path = False
             try:
-                target_el = page.query_selector(f".date_option[data-date='{match_value}']")
-                if target_el:
-                    classes = target_el.get_attribute("class") or ""
-                    status = target_el.get_attribute("data-detail-status") or ""
-                    if "unavailable" in classes:
-                        print(f"  [{label}] [{ts()}] target date {match_value} is unavailable — stopping")
-                        return STEP_NOT_FOUND
-                    if "check_back" in classes and "release today" not in status.lower():
-                        print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date — stopping")
-                        return STEP_NOT_FOUND
+                page.wait_for_selector(".date_option", timeout=10000)
             except Exception:
                 pass
-
-        # Precise reload: if target date is check_back with a known release time, sleep until then
-        if precise_reload:
+        else:
+            # Log current date grid state
             try:
-                target_el = page.query_selector(f".date_option[data-date='{match_value}']")
-                if target_el:
-                    status = target_el.get_attribute("data-detail-status") or ""
-                    if "release today" in status.lower():
-                        release_dt = parse_release_time(status, timezone_str)
-                        if release_dt:
-                            tz = ZoneInfo(timezone_str)
-                            sleep_secs = (release_dt - datetime.now(tz)).total_seconds()
-                            if sleep_secs > 0:
-                                print(f"  [{label}] [{ts()}] date is check_back — sleeping {sleep_secs:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
-                                time.sleep(sleep_secs)
-                                print(f"  [{label}] [{ts()}] reloading at release time")
-                                page.reload()
-                                continue
-            except Exception as e:
-                print(f"  [{label}] [{ts()}] precise_reload error: {e}")
+                page.wait_for_selector(".date_option", timeout=10000)
+                all_options = page.query_selector_all(".date_option")
+                print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid ({len(all_options)} options):")
+                for d in all_options:
+                    print(f"    classes='{d.get_attribute('class')}' date='{d.get_attribute('data-date')}' status='{d.get_attribute('data-detail-status')}'")
+            except Exception:
+                print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
+
+            # Stop early if target date is unavailable or check_back on a future date
+            if match_value:
+                try:
+                    target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+                    if target_el:
+                        classes = target_el.get_attribute("class") or ""
+                        status = target_el.get_attribute("data-detail-status") or ""
+                        if "unavailable" in classes:
+                            print(f"  [{label}] [{ts()}] target date {match_value} is unavailable — stopping")
+                            return STEP_NOT_FOUND
+                        if "check_back" in classes and "release today" not in status.lower():
+                            print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date — stopping")
+                            return STEP_NOT_FOUND
+                except Exception:
+                    pass
+
+            # Precise reload: if target date is check_back with a known release time, sleep until then
+            if precise_reload:
+                try:
+                    target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+                    if target_el:
+                        status = target_el.get_attribute("data-detail-status") or ""
+                        if "release today" in status.lower():
+                            release_dt = parse_release_time(status, timezone_str)
+                            if release_dt:
+                                tz = ZoneInfo(timezone_str)
+                                sleep_secs = (release_dt - datetime.now(tz)).total_seconds()
+                                if sleep_secs > 0:
+                                    print(f"  [{label}] [{ts()}] date is check_back — sleeping {sleep_secs:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
+                                    time.sleep(sleep_secs)
+                                    print(f"  [{label}] [{ts()}] reloading at release time")
+                                    page.reload()
+                                    fast_path = True
+                                    continue
+                except Exception as e:
+                    print(f"  [{label}] [{ts()}] precise_reload error: {e}")
 
         # Inject MutationObserver to log class changes
         try:
@@ -422,6 +432,11 @@ def execute_click_preferred(page, step, ctx):
     print(f"  [{label}] [{ts()}] preferred: {pref_avail} available, {pref_unavail} unavailable | non-preferred: {nonpref_avail} available, {nonpref_unavail} unavailable")
 
     available = page.query_selector_all(selector)
+    avail_texts = []
+    for slot in available:
+        text_el = slot.query_selector(text_selector) if text_selector else None
+        avail_texts.append(text_el.inner_text().strip() if text_el else "?")
+    print(f"  [{label}] [{ts()}] available slots ({len(avail_texts)}): {avail_texts}")
 
     for preferred in preferred_list:
         print(f"  [{label}] checking preferred: '{preferred}'")
