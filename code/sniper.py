@@ -209,6 +209,33 @@ def execute_steps(page, steps, ctx):
     return STEP_CONTINUE
 
 
+def _try_join_lottery(page, label, match_value, ts_fn):
+    """Before sleeping until release time, click the check_back date and join the lottery pool if #enter_lottery_btn appears."""
+    try:
+        target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+        if not target_el:
+            return False
+        print(f"  [{label}] [{ts_fn()}] pre-release: clicking date to check for lottery button")
+        target_el.click()
+        try:
+            page.wait_for_selector("#enter_lottery_btn", timeout=5000)
+        except Exception:
+            print(f"  [{label}] [{ts_fn()}] no #enter_lottery_btn found — not lottery mode")
+            return False
+        lottery_btn = page.query_selector("#enter_lottery_btn")
+        if not lottery_btn or not lottery_btn.is_visible():
+            print(f"  [{label}] [{ts_fn()}] #enter_lottery_btn not visible")
+            return False
+        print(f"  [{label}] [{ts_fn()}] LOTTERY MODE — clicking #enter_lottery_btn to join pool before release")
+        lottery_btn.click()
+        time.sleep(0.5)
+        print(f"  [{label}] [{ts_fn()}] joined lottery pool — will wait for admission after release reload")
+        return True
+    except Exception as e:
+        print(f"  [{label}] [{ts_fn()}] lottery join error: {e}")
+        return False
+
+
 def execute_poll(page, step, ctx):
     label = ctx["user"]
     debug = ctx.get("debug", False)
@@ -279,6 +306,8 @@ def execute_poll(page, step, ctx):
                                 tz = ZoneInfo(timezone_str)
                                 sleep_secs = (release_dt - datetime.now(tz)).total_seconds()
                                 if sleep_secs > 0:
+                                    # Try to join lottery pool before sleeping so we're in the draw at release time
+                                    _try_join_lottery(page, label, match_value, ts)
                                     print(f"  [{label}] [{ts()}] date is check_back — sleeping {sleep_secs:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
                                     time.sleep(sleep_secs)
                                     print(f"  [{label}] [{ts()}] reloading at release time")
