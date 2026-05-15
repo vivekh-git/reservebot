@@ -209,8 +209,8 @@ def execute_steps(page, steps, ctx):
     return STEP_CONTINUE
 
 
-def _try_join_lottery(page, label, match_value, ts_fn):
-    """Before sleeping until release time, click the check_back date and join the lottery pool if #enter_lottery_btn appears."""
+def _try_join_lottery(page, label, match_value, ts_fn, timeout_ms=5000):
+    """Click the target check_back date and join the lottery pool if #enter_lottery_btn appears within timeout_ms."""
     try:
         target_el = page.query_selector(f".date_option[data-date='{match_value}']")
         if not target_el:
@@ -218,15 +218,15 @@ def _try_join_lottery(page, label, match_value, ts_fn):
         print(f"  [{label}] [{ts_fn()}] pre-release: clicking date to check for lottery button")
         target_el.click()
         try:
-            page.wait_for_selector("#enter_lottery_btn", timeout=5000)
+            page.wait_for_selector("#enter_lottery_btn", timeout=timeout_ms)
         except Exception:
-            print(f"  [{label}] [{ts_fn()}] no #enter_lottery_btn found — not lottery mode")
+            print(f"  [{label}] [{ts_fn()}] no #enter_lottery_btn found (waited {timeout_ms}ms) — not lottery mode")
             return False
         lottery_btn = page.query_selector("#enter_lottery_btn")
         if not lottery_btn or not lottery_btn.is_visible():
             print(f"  [{label}] [{ts_fn()}] #enter_lottery_btn not visible")
             return False
-        print(f"  [{label}] [{ts_fn()}] LOTTERY MODE — clicking #enter_lottery_btn to join pool before release")
+        print(f"  [{label}] [{ts_fn()}] LOTTERY MODE — clicking #enter_lottery_btn to join pool")
         lottery_btn.click()
         time.sleep(0.5)
         print(f"  [{label}] [{ts_fn()}] joined lottery pool — will wait for admission after release reload")
@@ -306,10 +306,31 @@ def execute_poll(page, step, ctx):
                                 tz = ZoneInfo(timezone_str)
                                 sleep_secs = (release_dt - datetime.now(tz)).total_seconds()
                                 if sleep_secs > 0:
-                                    # Try to join lottery pool before sleeping so we're in the draw at release time
-                                    _try_join_lottery(page, label, match_value, ts)
-                                    print(f"  [{label}] [{ts()}] date is check_back — sleeping {sleep_secs:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
-                                    time.sleep(sleep_secs)
+                                    # The lottery button (#enter_lottery_btn) only appears close to
+                                    # release time, not hours in advance. Wake up 2 min before release
+                                    # to join the pool, then reload exactly at release time.
+                                    LOTTERY_BUFFER_SECS = 120
+                                    if sleep_secs > LOTTERY_BUFFER_SECS:
+                                        pre_sleep = sleep_secs - LOTTERY_BUFFER_SECS
+                                        print(f"  [{label}] [{ts()}] date is check_back — sleeping {pre_sleep:.0f}s (until {LOTTERY_BUFFER_SECS}s before release at {release_dt.strftime('%H:%M:%S %Z')})")
+                                        time.sleep(pre_sleep)
+                                        print(f"  [{label}] [{ts()}] pre-release reload to look for lottery button")
+                                        page.reload()
+                                        try:
+                                            page.wait_for_selector(".date_option", timeout=10000)
+                                        except Exception:
+                                            pass
+                                        # Button appears in the last ~1-2 min before release; wait up to 90s for it
+                                        _try_join_lottery(page, label, match_value, ts, timeout_ms=90000)
+                                    else:
+                                        # Already within the lottery window — try joining with remaining time minus a safety margin
+                                        lottery_timeout_ms = int(max(5000, (sleep_secs - 5) * 1000))
+                                        _try_join_lottery(page, label, match_value, ts, timeout_ms=lottery_timeout_ms)
+                                    # Sleep whatever time remains until release, then reload
+                                    remaining = (release_dt - datetime.now(tz)).total_seconds()
+                                    if remaining > 0:
+                                        print(f"  [{label}] [{ts()}] sleeping {remaining:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
+                                        time.sleep(remaining)
                                     print(f"  [{label}] [{ts()}] reloading at release time")
                                     page.reload()
                                     fast_path = True
