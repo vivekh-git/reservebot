@@ -258,6 +258,7 @@ def execute_poll(page, step, ctx):
 
     print(f"  [{label}] [{ts()}] poll: waiting for '{targeted}' (precise_reload={precise_reload}, slot_retries={slot_retries})")
 
+    pool_joined = False
     fast_path = False
     for attempt in range(max_reloads + 1):
         if fast_path:
@@ -295,7 +296,12 @@ def execute_poll(page, step, ctx):
                                 print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date ('{status}') — stopping")
                                 return STEP_NOT_FOUND
                             # "Waiting for next batch" or any other check_back without a named future day:
-                            # keep polling — a batch may open at any time
+                            # try joining the lottery pool immediately — button may be open far in advance
+                            if not pool_joined:
+                                pool_joined = _try_join_lottery(page, label, match_value, ts, timeout_ms=5000)
+                                if pool_joined:
+                                    # Extend wait so we stay on the page for the Ably lottery result
+                                    wait_ms = max(wait_ms, 1800000)  # up to 30 min
                 except Exception:
                     pass
 
@@ -333,6 +339,7 @@ def execute_poll(page, step, ctx):
                                         lottery_timeout_ms = int(max(5000, (sleep_secs - 5) * 1000))
                                         in_pool = _try_join_lottery(page, label, match_value, ts, timeout_ms=lottery_timeout_ms)
                                     if in_pool:
+                                        pool_joined = True
                                         # Already on the page with Ably subscribed — lottery result fires as a DOM
                                         # class change on the date element (check_back → available). No reload needed.
                                         remaining_ms = int((release_dt - datetime.now(tz)).total_seconds() * 1000)
