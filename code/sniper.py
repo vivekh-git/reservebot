@@ -278,7 +278,7 @@ def execute_poll(page, step, ctx):
             except Exception:
                 print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
 
-            # Stop early if target date is unavailable or check_back on a future date
+            # Stop early if target date is unavailable or check_back with a named future-day release
             if match_value:
                 try:
                     target_el = page.query_selector(f".date_option[data-date='{match_value}']")
@@ -288,9 +288,14 @@ def execute_poll(page, step, ctx):
                         if "unavailable" in classes:
                             print(f"  [{label}] [{ts()}] target date {match_value} is unavailable — stopping")
                             return STEP_NOT_FOUND
-                        if "check_back" in classes and "release today" not in status.lower():
-                            print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date — stopping")
-                            return STEP_NOT_FOUND
+                        if "check_back" in classes:
+                            status_lower = status.lower()
+                            _days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+                            if any(d in status_lower for d in _days) and "today" not in status_lower:
+                                print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date ('{status}') — stopping")
+                                return STEP_NOT_FOUND
+                            # "Waiting for next batch" or any other check_back without a named future day:
+                            # keep polling — a batch may open at any time
                 except Exception:
                     pass
 
