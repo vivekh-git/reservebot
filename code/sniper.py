@@ -258,7 +258,8 @@ def execute_poll(page, step, ctx):
 
     print(f"  [{label}] [{ts()}] poll: waiting for '{targeted}' (precise_reload={precise_reload}, slot_retries={slot_retries})")
 
-    pool_joined = False
+    pool_joined = False          # True once we have confirmed pool membership
+    lottery_join_attempted = False  # True after the first join attempt (success or not)
     fast_path = False
     for attempt in range(max_reloads + 1):
         if fast_path:
@@ -296,8 +297,10 @@ def execute_poll(page, step, ctx):
                                 print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date ('{status}') — stopping")
                                 return STEP_NOT_FOUND
                             # "Waiting for next batch" or any other check_back without a named future day:
-                            # try joining the lottery pool immediately — button may be open far in advance
-                            if not pool_joined:
+                            # try joining the lottery pool immediately — button may be open far in advance.
+                            # Only attempt once per session; if button is absent we skip on subsequent reloads.
+                            if not lottery_join_attempted:
+                                lottery_join_attempted = True
                                 pool_joined = _try_join_lottery(page, label, match_value, ts, timeout_ms=5000)
                                 if pool_joined:
                                     # Extend wait so we stay on the page for the Ably lottery result

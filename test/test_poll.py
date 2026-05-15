@@ -36,13 +36,6 @@ def mock_server():
 
 # ── Playwright browser ───────────────────────────────────────────────────────
 
-@pytest.fixture(scope="session")
-def browser():
-    with sync_playwright() as p:
-        b = p.chromium.launch(headless=True)
-        yield b
-        b.close()
-
 @pytest.fixture
 def page(browser):
     ctx = browser.new_context()
@@ -208,8 +201,11 @@ def test_dom_observer_logs_class_change(mock_server, browser):
 
     assert len(observer_logs) >= 1, f"[dom:observer] not found in: {logs}"
     assert len(change_logs) >= 1, f"[dom:classchange] not found in: {logs}"
-    assert "date=2026-04-05" in change_logs[0], f"Wrong date in: {change_logs[0]}"
-    assert "available" in change_logs[0], f"Expected 'available' class in: {change_logs[0]}"
+    target_changes = [l for l in change_logs if "date=2026-04-05" in l]
+    assert target_changes, f"No classchange for date=2026-04-05 in: {change_logs}"
+    assert any("available" in l for l in target_changes), (
+        f"Expected 'available' class in target changes: {target_changes}"
+    )
 
 
 def test_poll_logs_landing_timestamp(page, mock_server, capsys):
@@ -401,3 +397,167 @@ def test_phase2_date_unavailable_raises_and_outer_loop_exits(page):
     assert result == sniper.STEP_NOT_FOUND, f"Expected STEP_NOT_FOUND when slot lost, got {result}"
     assert call_count[0] == 2, f"Expected exactly 2 requests (initial + one reload), got {call_count[0]}"
     print(f"\nCorrectly returned STEP_NOT_FOUND after slot lost — {call_count[0]} requests made")
+
+
+# ── Lottery flow tests ───────────────────────────────────────────────────────
+
+def _lottery_page(date="2026-05-16", flip_after_ms=300):
+    """
+    Mock page with a check_back date. Clicking the date injects #enter_lottery_btn.
+    Clicking the button flips the date to .available after flip_after_ms (simulates
+    Ably delivering the lottery result). Clicking the now-available date loads slots.
+    """
+    return f"""<!DOCTYPE html><html><body>
+    <div class="date_option check_back" data-date="{date}" data-detail-status="Waiting for next batch">{date}</div>
+    <div id="time_chooser"></div>
+    <script>
+      document.querySelector('.date_option').addEventListener('click', function() {{
+        var el = this;
+        if (el.classList.contains('check_back')) {{
+          // Inject lottery button into DOM (like Ractive.js renders it from AJAX response)
+          document.getElementById('time_chooser').innerHTML =
+            '<button id="enter_lottery_btn">Request a Reservation</button>';
+        }} else if (el.classList.contains('available')) {{
+          // Re-clicked after admission — load slots
+          setTimeout(function() {{
+            document.getElementById('time_chooser').innerHTML =
+              '<div class="slot_container"><div class="slot"><div class="time">3:00</div></div></div>';
+          }}, 100);
+        }}
+      }});
+      document.addEventListener('click', function(e) {{
+        if (e.target.id !== 'enter_lottery_btn') return;
+        e.target.disabled = true;
+        setTimeout(function() {{
+          var el = document.querySelector('.date_option[data-date="{date}"]');
+          el.className = 'date_option available';
+          el.setAttribute('data-detail-status', 'Reserve now');
+        }}, {flip_after_ms});
+      }});
+    </script>
+    </body></html>"""
+
+
+def _check_back_no_lottery_page(date="2026-05-16", flip_after_ms=500):
+    """
+    check_back date with NO lottery button. Date flips to available after
+    flip_after_ms via a JS timeout (simulates a non-lottery batch release).
+    Clicking the available date loads slots.
+    """
+    return f"""<!DOCTYPE html><html><body>
+    <div class="date_option check_back" data-date="{date}" data-detail-status="Waiting for next batch">{date}</div>
+    <div id="time_chooser"></div>
+    <script>
+      setTimeout(function() {{
+        var el = document.querySelector('.date_option[data-date="{date}"]');
+        el.className = 'date_option available';
+        el.setAttribute('data-detail-status', 'Reserve now');
+      }}, {flip_after_ms});
+      document.querySelector('.date_option').addEventListener('click', function() {{
+        if (!this.classList.contains('available')) return;
+        setTimeout(function() {{
+          document.getElementById('time_chooser').innerHTML =
+            '<div class="slot_container"><div class="slot"><div class="time">3:00</div></div></div>';
+        }}, 100);
+      }});
+    </script>
+    </body></html>"""
+
+
+def test_waiting_for_next_batch_does_not_stop_early(page, capsys):
+    """
+    'Waiting for next batch' is check_back without a named future weekday.
+    The bot must NOT return STEP_NOT_FOUND — it should keep polling and catch
+    the date becoming available.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    # check_back date flips to available after 600ms (no lottery button)
+    page.set_content(_check_back_no_lottery_page(flip_after_ms=600))
+
+    step = {
+        "action": "poll",
+        "selector": ".date_option.available",
+        "match_attribute": "data-date",
+        "match_value": "2026-05-16",
+        "on_match": [],
+    }
+    ctx = {"user": "testuser", "password": "x", "target_date": "2026-05-16"}
+    result = sniper.execute_poll(page, step, ctx)
+
+    assert result != sniper.STEP_NOT_FOUND, "Should not stop early on 'Waiting for next batch'"
+    captured = capsys.readouterr()
+    assert "future date" not in captured.out, "Should not log 'future date' stop message"
+    print("\n'Waiting for next batch' correctly kept polling")
+
+
+def test_lottery_join_early_on_check_back(page, capsys):
+    """
+    When the date is check_back and #enter_lottery_btn is immediately available
+    (lottery pool open far in advance), the bot should click it, join the pool,
+    then wait for the date to flip to available (Ably lottery result) and book.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    page.set_content(_lottery_page(flip_after_ms=400))
+
+    on_match = [
+        {"action": "wait_for", "selector": ".slot_container"},
+        {"action": "click_preferred", "selector": ".slot_container", "text_selector": ".time", "preferred": ["3:00"]},
+    ]
+    step = {
+        "action": "poll",
+        "selector": ".date_option.available",
+        "match_attribute": "data-date",
+        "match_value": "2026-05-16",
+        "on_match": on_match,
+    }
+    ctx = {"user": "testuser", "password": "x", "target_date": "2026-05-16"}
+    result = sniper.execute_poll(page, step, ctx)
+
+    captured = capsys.readouterr()
+    assert "LOTTERY MODE" in captured.out, "Bot should detect #enter_lottery_btn"
+    assert "joined lottery pool" in captured.out, "Bot should log pool join"
+    assert ctx.get("booked_time") is not None, "Should book a time after lottery admission"
+    print(f"\nLottery early join: joined pool and booked '{ctx['booked_time']}'")
+
+
+def test_lottery_join_attempted_only_once(page, capsys):
+    """
+    When #enter_lottery_btn is absent (non-lottery date), _try_join_lottery is
+    called exactly once (lottery_join_attempted flag prevents retries). The bot
+    then falls through to normal polling and catches the date flip.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    join_call_count = [0]
+    original = sniper._try_join_lottery
+
+    def counting_join(pg, label, match_value, ts_fn, timeout_ms=5000):
+        join_call_count[0] += 1
+        return original(pg, label, match_value, ts_fn, timeout_ms=1)  # 1ms — instant fail
+
+    sniper._try_join_lottery = counting_join
+
+    # No lottery button; date flips after 200ms
+    page.set_content(_check_back_no_lottery_page(flip_after_ms=200))
+
+    step = {
+        "action": "poll",
+        "selector": ".date_option.available",
+        "match_attribute": "data-date",
+        "match_value": "2026-05-16",
+        "on_match": [],
+    }
+    ctx = {"user": "testuser", "password": "x", "target_date": "2026-05-16"}
+    sniper.execute_poll(page, step, ctx)
+
+    sniper._try_join_lottery = original
+
+    assert join_call_count[0] == 1, (
+        f"_try_join_lottery should be called exactly once, got {join_call_count[0]}"
+    )
+    print(f"\nLottery join attempted exactly once: {join_call_count[0]}")

@@ -106,13 +106,6 @@ _CONFIRMATION_HTML = """<!DOCTYPE html><html><body>
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-@pytest.fixture(scope="module")
-def browser():
-    with sync_playwright() as p:
-        b = p.chromium.launch(headless=True)
-        yield b
-        b.close()
-
 # ── Test ──────────────────────────────────────────────────────────────────────
 
 def test_full_booking_flow(browser):
