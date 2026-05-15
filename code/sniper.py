@@ -308,8 +308,9 @@ def execute_poll(page, step, ctx):
                                 if sleep_secs > 0:
                                     # The lottery button (#enter_lottery_btn) only appears close to
                                     # release time, not hours in advance. Wake up 2 min before release
-                                    # to join the pool, then reload exactly at release time.
+                                    # to join the pool.
                                     LOTTERY_BUFFER_SECS = 120
+                                    in_pool = False
                                     if sleep_secs > LOTTERY_BUFFER_SECS:
                                         pre_sleep = sleep_secs - LOTTERY_BUFFER_SECS
                                         print(f"  [{label}] [{ts()}] date is check_back — sleeping {pre_sleep:.0f}s (until {LOTTERY_BUFFER_SECS}s before release at {release_dt.strftime('%H:%M:%S %Z')})")
@@ -321,20 +322,28 @@ def execute_poll(page, step, ctx):
                                         except Exception:
                                             pass
                                         # Button appears in the last ~1-2 min before release; wait up to 90s for it
-                                        _try_join_lottery(page, label, match_value, ts, timeout_ms=90000)
+                                        in_pool = _try_join_lottery(page, label, match_value, ts, timeout_ms=90000)
                                     else:
                                         # Already within the lottery window — try joining with remaining time minus a safety margin
                                         lottery_timeout_ms = int(max(5000, (sleep_secs - 5) * 1000))
-                                        _try_join_lottery(page, label, match_value, ts, timeout_ms=lottery_timeout_ms)
-                                    # Sleep whatever time remains until release, then reload
-                                    remaining = (release_dt - datetime.now(tz)).total_seconds()
-                                    if remaining > 0:
-                                        print(f"  [{label}] [{ts()}] sleeping {remaining:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
-                                        time.sleep(remaining)
-                                    print(f"  [{label}] [{ts()}] reloading at release time")
-                                    page.reload()
-                                    fast_path = True
-                                    continue
+                                        in_pool = _try_join_lottery(page, label, match_value, ts, timeout_ms=lottery_timeout_ms)
+                                    if in_pool:
+                                        # Already on the page with Ably subscribed — lottery result fires as a DOM
+                                        # class change on the date element (check_back → available). No reload needed.
+                                        remaining_ms = int((release_dt - datetime.now(tz)).total_seconds() * 1000)
+                                        wait_ms = max(wait_ms, remaining_ms + 30000)
+                                        print(f"  [{label}] [{ts()}] in lottery pool — staying on page, extended wait to {wait_ms}ms")
+                                        # fall through to MutationObserver + wait_for_selector
+                                    else:
+                                        # Not lottery mode — sleep remaining time and reload at release
+                                        remaining = (release_dt - datetime.now(tz)).total_seconds()
+                                        if remaining > 0:
+                                            print(f"  [{label}] [{ts()}] sleeping {remaining:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
+                                            time.sleep(remaining)
+                                        print(f"  [{label}] [{ts()}] reloading at release time")
+                                        page.reload()
+                                        fast_path = True
+                                        continue
                 except Exception as e:
                     print(f"  [{label}] [{ts()}] precise_reload error: {e}")
 
