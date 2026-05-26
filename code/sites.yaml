@@ -47,7 +47,6 @@ sites:
         selector: ".date_option.available"
         match_attribute: "data-date"
         match_value: "{target_date}"
-        precise_reload: true
         slot_retries: 3
         card_button_selector: "#card-button"
         on_match:

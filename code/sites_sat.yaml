@@ -70,6 +70,10 @@ sites:
       - action: click
         selector: "#qc-id-getstarted-button-getstarted"
 
+      - action: screenshot
+        filename: "after_getstarted_{user}.png"
+        full_page: true
+
       # Confirm personal info
       - action: wait_for
         selector: "#qc-id-personalinfo-button-gradeconfirm"

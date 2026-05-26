@@ -174,6 +174,13 @@ def execute_step(page, step, ctx):
         print(f"  [{label}] [{ts()}] -> pausing for manual inspection")
         page.pause()
 
+    elif action == "screenshot":
+        filename = resolve(step.get("filename", "screenshot_{user}_{ts}.png"), ctx)
+        filename = filename.replace("{ts}", ts().replace(":", "-"))
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+        page.screenshot(path=path, full_page=step.get("full_page", False))
+        print(f"  [{label}] [{ts()}] -> screenshot saved: {path}")
+
     elif action == "if_on_url":
         url = resolve(step["url"], ctx)
         print(f"  [{label}] [{ts()}] -> if_on_url '{url}' (current: {page.url})")
@@ -240,7 +247,6 @@ def execute_poll(page, step, ctx):
     label = ctx["user"]
     debug = ctx.get("debug", False)
     timezone_str = ctx.get("timezone", "America/Los_Angeles")
-    precise_reload = step.get("precise_reload", False)
     slot_retries = step.get("slot_retries", 1)
     print(f"  [{label}] [{ts()}] poll: landed on reservations page")
     selector = step["selector"]
@@ -256,111 +262,53 @@ def execute_poll(page, step, ctx):
     wait_ms = 30000
     max_reloads = 24
 
-    print(f"  [{label}] [{ts()}] poll: waiting for '{targeted}' (precise_reload={precise_reload}, slot_retries={slot_retries})")
+    print(f"  [{label}] [{ts()}] poll: waiting for '{targeted}' (slot_retries={slot_retries})")
 
     pool_joined = False          # True once we have confirmed pool membership
     lottery_join_attempted = False  # True after the first join attempt (success or not)
-    fast_path = False
     for attempt in range(max_reloads + 1):
-        if fast_path:
-            # After a precise_reload, skip diagnostics — just wait for the page then click
-            fast_path = False
+        # Log current date grid state
+        try:
+            page.wait_for_selector(".date_option", timeout=10000)
+            all_options = page.query_selector_all(".date_option")
+            print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid ({len(all_options)} options):")
+            for d in all_options:
+                print(f"    classes='{d.get_attribute('class')}' date='{d.get_attribute('data-date')}' status='{d.get_attribute('data-detail-status')}'")
+        except Exception:
+            print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
+
+        # Stop early if target date is unavailable or check_back with a named future-day release
+        if match_value:
             try:
-                page.wait_for_selector(".date_option", timeout=10000)
+                target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+                if target_el:
+                    classes = target_el.get_attribute("class") or ""
+                    status = target_el.get_attribute("data-detail-status") or ""
+                    if "unavailable" in classes:
+                        print(f"  [{label}] [{ts()}] target date {match_value} is unavailable — stopping")
+                        return STEP_NOT_FOUND
+                    if "check_back" in classes:
+                        status_lower = status.lower()
+                        _days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+                        if any(d in status_lower for d in _days) and "today" not in status_lower:
+                            print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date ('{status}') — stopping")
+                            return STEP_NOT_FOUND
+                        if not lottery_join_attempted:
+                            lottery_join_attempted = True
+                            # Use the remaining seconds until release as the button-wait timeout so
+                            # we catch the lottery button whenever it appears in the pre-release window.
+                            _timeout_ms = 5000
+                            if "today" in status_lower:
+                                _rdt = parse_release_time(status, timezone_str)
+                                if _rdt:
+                                    _secs = (_rdt - datetime.now(ZoneInfo(timezone_str))).total_seconds()
+                                    if _secs > 5:
+                                        _timeout_ms = int(min(90000, (_secs - 5) * 1000))
+                            pool_joined = _try_join_lottery(page, label, match_value, ts, timeout_ms=_timeout_ms)
+                            if pool_joined:
+                                wait_ms = max(wait_ms, 1800000)  # up to 30 min for Ably admission
             except Exception:
                 pass
-        else:
-            # Log current date grid state
-            try:
-                page.wait_for_selector(".date_option", timeout=10000)
-                all_options = page.query_selector_all(".date_option")
-                print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid ({len(all_options)} options):")
-                for d in all_options:
-                    print(f"    classes='{d.get_attribute('class')}' date='{d.get_attribute('data-date')}' status='{d.get_attribute('data-detail-status')}'")
-            except Exception:
-                print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
-
-            # Stop early if target date is unavailable or check_back with a named future-day release
-            if match_value:
-                try:
-                    target_el = page.query_selector(f".date_option[data-date='{match_value}']")
-                    if target_el:
-                        classes = target_el.get_attribute("class") or ""
-                        status = target_el.get_attribute("data-detail-status") or ""
-                        if "unavailable" in classes:
-                            print(f"  [{label}] [{ts()}] target date {match_value} is unavailable — stopping")
-                            return STEP_NOT_FOUND
-                        if "check_back" in classes:
-                            status_lower = status.lower()
-                            _days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-                            if any(d in status_lower for d in _days) and "today" not in status_lower:
-                                print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date ('{status}') — stopping")
-                                return STEP_NOT_FOUND
-                            # "Waiting for next batch" or any other check_back without a named future day:
-                            # try joining the lottery pool immediately — button may be open far in advance.
-                            # Only attempt once per session; if button is absent we skip on subsequent reloads.
-                            if not lottery_join_attempted:
-                                lottery_join_attempted = True
-                                pool_joined = _try_join_lottery(page, label, match_value, ts, timeout_ms=5000)
-                                if pool_joined:
-                                    # Extend wait so we stay on the page for the Ably lottery result
-                                    wait_ms = max(wait_ms, 1800000)  # up to 30 min
-                except Exception:
-                    pass
-
-            # Precise reload: if target date is check_back with a known release time, sleep until then
-            if precise_reload:
-                try:
-                    target_el = page.query_selector(f".date_option[data-date='{match_value}']")
-                    if target_el:
-                        status = target_el.get_attribute("data-detail-status") or ""
-                        if "release today" in status.lower():
-                            release_dt = parse_release_time(status, timezone_str)
-                            if release_dt:
-                                tz = ZoneInfo(timezone_str)
-                                sleep_secs = (release_dt - datetime.now(tz)).total_seconds()
-                                if sleep_secs > 0:
-                                    # The lottery button (#enter_lottery_btn) only appears close to
-                                    # release time, not hours in advance. Wake up 2 min before release
-                                    # to join the pool.
-                                    LOTTERY_BUFFER_SECS = 120
-                                    in_pool = False
-                                    if sleep_secs > LOTTERY_BUFFER_SECS:
-                                        pre_sleep = sleep_secs - LOTTERY_BUFFER_SECS
-                                        print(f"  [{label}] [{ts()}] date is check_back — sleeping {pre_sleep:.0f}s (until {LOTTERY_BUFFER_SECS}s before release at {release_dt.strftime('%H:%M:%S %Z')})")
-                                        time.sleep(pre_sleep)
-                                        print(f"  [{label}] [{ts()}] pre-release reload to look for lottery button")
-                                        page.reload()
-                                        try:
-                                            page.wait_for_selector(".date_option", timeout=10000)
-                                        except Exception:
-                                            pass
-                                        # Button appears in the last ~1-2 min before release; wait up to 90s for it
-                                        in_pool = _try_join_lottery(page, label, match_value, ts, timeout_ms=90000)
-                                    else:
-                                        # Already within the lottery window — try joining with remaining time minus a safety margin
-                                        lottery_timeout_ms = int(max(5000, (sleep_secs - 5) * 1000))
-                                        in_pool = _try_join_lottery(page, label, match_value, ts, timeout_ms=lottery_timeout_ms)
-                                    if in_pool:
-                                        pool_joined = True
-                                        # Already on the page with Ably subscribed — lottery result fires as a DOM
-                                        # class change on the date element (check_back → available). No reload needed.
-                                        remaining_ms = int((release_dt - datetime.now(tz)).total_seconds() * 1000)
-                                        wait_ms = max(wait_ms, remaining_ms + 30000)
-                                        print(f"  [{label}] [{ts()}] in lottery pool — staying on page, extended wait to {wait_ms}ms")
-                                        # fall through to MutationObserver + wait_for_selector
-                                    else:
-                                        # Not lottery mode — sleep remaining time and reload at release
-                                        remaining = (release_dt - datetime.now(tz)).total_seconds()
-                                        if remaining > 0:
-                                            print(f"  [{label}] [{ts()}] sleeping {remaining:.1f}s until release at {release_dt.strftime('%H:%M:%S %Z')}")
-                                            time.sleep(remaining)
-                                        print(f"  [{label}] [{ts()}] reloading at release time")
-                                        page.reload()
-                                        fast_path = True
-                                        continue
-                except Exception as e:
-                    print(f"  [{label}] [{ts()}] precise_reload error: {e}")
 
         # Inject MutationObserver to log class changes
         try:
