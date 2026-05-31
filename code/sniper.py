@@ -47,6 +47,20 @@ def next_target_date():
     return str(today + timedelta(days=days_ahead))
 
 
+def next_sunday_date():
+    today = date.today()
+    days_ahead = (6 - today.weekday()) % 7  # 0 if today is Sunday
+    return str(today + timedelta(days=days_ahead))
+
+
+def next_test_date():
+    today = date.today()
+    days_ahead = (1 - today.weekday()) % 7  # Tuesday = weekday 1
+    if days_ahead == 0:
+        days_ahead = 7
+    return str(today + timedelta(days=days_ahead))
+
+
 def ts():
     return datetime.now().strftime('%H:%M:%S.%f')[:-3]
 
@@ -205,6 +219,9 @@ def execute_steps(page, steps, ctx):
     no_pause = ctx.get("no_pause", False)
     for step in steps:
         label = ctx["user"]
+        if ctx.get("test_mode") and step.get("confirms_booking"):
+            print(f"[{label}] [{ts()}] [test_mode] stopping before final booking confirmation — not clicking '{step.get('selector', '')}'")
+            return STEP_DRY_RUN
         print(f"\n[{label}] ── step: {step['action']} [{ts()}] ──────────────────────────────")
         result = execute_step(page, step, ctx)
         print(f"[{label}] URL after step: {page.url}")
@@ -212,6 +229,9 @@ def execute_steps(page, steps, ctx):
             print(f"[{label}] [local] pausing for inspection...")
             page.pause()
         if result is not STEP_CONTINUE:
+            if step.get("continue_if_no_booking") and result in (STEP_NOT_FOUND, STEP_FAILURE):
+                print(f"[{label}] [{ts()}] Saturday poll returned no booking — continuing to test date poll")
+                continue
             return result
     return STEP_CONTINUE
 
@@ -248,6 +268,8 @@ def execute_poll(page, step, ctx):
     debug = ctx.get("debug", False)
     timezone_str = ctx.get("timezone", "America/Los_Angeles")
     slot_retries = step.get("slot_retries", 1)
+    if step.get("test_mode"):
+        ctx["test_mode"] = True
     print(f"  [{label}] [{ts()}] poll: landed on reservations page")
     selector = step["selector"]
     match_attr = step.get("match_attribute")
@@ -277,15 +299,18 @@ def execute_poll(page, step, ctx):
         except Exception:
             print(f"  [{label}] [{ts()}] Attempt {attempt+1} — date grid did not render")
 
-        # Stop early if target date is unavailable or check_back with a named future-day release
+        # Stop early if target date is not in grid, closed, unavailable, or check_back with future release
         if match_value:
             try:
                 target_el = page.query_selector(f".date_option[data-date='{match_value}']")
+                if not target_el:
+                    print(f"  [{label}] [{ts()}] target date {match_value} not in date grid — stopping")
+                    return STEP_NOT_FOUND
                 if target_el:
                     classes = target_el.get_attribute("class") or ""
                     status = target_el.get_attribute("data-detail-status") or ""
-                    if "unavailable" in classes:
-                        print(f"  [{label}] [{ts()}] target date {match_value} is unavailable — stopping")
+                    if "closed" in classes or "unavailable" in classes:
+                        print(f"  [{label}] [{ts()}] target date {match_value} is closed/unavailable — stopping")
                         return STEP_NOT_FOUND
                     if "check_back" in classes:
                         status_lower = status.lower()
@@ -502,6 +527,8 @@ def run_site(site_config, user, password, target_date, dry_run=False, no_pause=F
         "user": user,
         "password": password,
         "target_date": target_date,
+        "sunday_date": next_sunday_date(),
+        "test_date": next_test_date(),
         "booked_time": "unknown",
         "dry_run": dry_run,
         "no_pause": no_pause,
@@ -565,7 +592,14 @@ def run_site(site_config, user, password, target_date, dry_run=False, no_pause=F
 
     if not ctx.get("email_sent"):
         if result == STEP_DRY_RUN:
-            print(f"[{user}] DRY RUN complete — would have booked {target_date} at {ctx['booked_time']} on {name}. No booking made.")
+            if ctx.get("test_mode"):
+                send_email(
+                    f"Test run complete — {name} ({user})",
+                    f"Full booking flow ran for {ctx.get('test_date', target_date)} at {ctx['booked_time']} on {name} for {user}. "
+                    f"Stopped before final confirmation — no booking was made.",
+                )
+            else:
+                print(f"[{user}] DRY RUN complete — would have booked {target_date} at {ctx['booked_time']} on {name}. No booking made.")
         elif result == STEP_SUCCESS:
             send_email(
                 f"Reservation booked — {name} ({user})",
