@@ -561,3 +561,212 @@ def test_lottery_join_attempted_only_once(page, capsys):
         f"_try_join_lottery should be called exactly once, got {join_call_count[0]}"
     )
     print(f"\nLottery join attempted exactly once: {join_call_count[0]}")
+
+
+# ── Date helper tests ────────────────────────────────────────────────────────
+
+def test_next_sunday_date():
+    """next_sunday_date() should always return a Sunday >= today."""
+    from datetime import datetime, date
+    import sniper
+    result = sniper.next_sunday_date()
+    d = datetime.strptime(result, "%Y-%m-%d").date()
+    assert d.weekday() == 6, f"Expected Sunday (weekday 6), got weekday {d.weekday()} for {result}"
+    assert d >= date.today(), f"next_sunday_date() returned a past date: {result}"
+    print(f"\nnext_sunday_date() = {result}")
+
+
+def test_next_test_date():
+    """next_test_date() should always return a Tuesday strictly in the future (never today)."""
+    from datetime import datetime, date
+    import sniper
+    result = sniper.next_test_date()
+    d = datetime.strptime(result, "%Y-%m-%d").date()
+    assert d.weekday() == 1, f"Expected Tuesday (weekday 1), got weekday {d.weekday()} for {result}"
+    assert d > date.today(), f"next_test_date() should be strictly future, got {result}"
+    print(f"\nnext_test_date() = {result}")
+
+
+# ── closed / not-in-grid early exit tests ───────────────────────────────────
+
+def test_early_exit_closed_date(page):
+    """
+    When the target date has class 'closed', execute_poll must return STEP_NOT_FOUND
+    on the first attempt — no looping through 24 reloads.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    reload_count = [0]
+    original_reload = page.reload
+    def counting_reload(**kwargs):
+        reload_count[0] += 1
+        return original_reload(**kwargs)
+    page.reload = counting_reload
+
+    page.set_content(_booking_page(date_class="closed", date_status="Closed"))
+
+    step = {
+        "action": "poll",
+        "selector": ".date_option.available",
+        "match_attribute": "data-date",
+        "match_value": "2026-04-05",
+        "on_match": [],
+    }
+    ctx = {"user": "testuser", "password": "x", "target_date": "2026-04-05"}
+    result = sniper.execute_poll(page, step, ctx)
+
+    assert result == sniper.STEP_NOT_FOUND, f"Expected STEP_NOT_FOUND for closed date, got {result}"
+    assert reload_count[0] == 0, f"Should not reload for closed date, got {reload_count[0]} reloads"
+    print(f"\nClosed date: STEP_NOT_FOUND immediately, 0 reloads")
+
+
+def test_early_exit_not_in_grid(page):
+    """
+    When the target date is absent from the date grid entirely,
+    execute_poll must return STEP_NOT_FOUND immediately.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    reload_count = [0]
+    original_reload = page.reload
+    def counting_reload(**kwargs):
+        reload_count[0] += 1
+        return original_reload(**kwargs)
+    page.reload = counting_reload
+
+    # Grid only contains 2026-04-06, target is 2026-04-05 (not present)
+    page.set_content(_booking_page(date="2026-04-06", date_class="available"))
+
+    step = {
+        "action": "poll",
+        "selector": ".date_option.available",
+        "match_attribute": "data-date",
+        "match_value": "2026-04-05",
+        "on_match": [],
+    }
+    ctx = {"user": "testuser", "password": "x", "target_date": "2026-04-05"}
+    result = sniper.execute_poll(page, step, ctx)
+
+    assert result == sniper.STEP_NOT_FOUND, f"Expected STEP_NOT_FOUND when date not in grid, got {result}"
+    assert reload_count[0] == 0, f"Should not reload when date not in grid, got {reload_count[0]} reloads"
+    print(f"\nDate not in grid: STEP_NOT_FOUND immediately, 0 reloads")
+
+
+# ── test_mode / confirms_booking tests ──────────────────────────────────────
+
+def test_test_mode_stops_at_confirms_booking(page, capsys):
+    """
+    In test_mode, execute_steps must intercept any step with confirms_booking=True
+    and return STEP_DRY_RUN without executing that step or any following steps.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    page.set_content("""<!DOCTYPE html><html><body>
+        <button id="btn1">Step 1</button>
+        <button id="btn2">Confirm Booking</button>
+        <button id="btn3">Step After</button>
+    </body></html>""")
+    page.evaluate("""() => {
+        window._clicks = [];
+        ['btn1','btn2','btn3'].forEach(function(id) {
+            document.getElementById(id).addEventListener('click', function() {
+                window._clicks.push(id);
+            });
+        });
+    }""")
+
+    steps = [
+        {"action": "click", "selector": "#btn1"},
+        {"action": "click", "selector": "#btn2", "confirms_booking": True},
+        {"action": "click", "selector": "#btn3"},
+    ]
+    ctx = {"user": "testuser", "password": "x", "target_date": "2026-04-05",
+           "test_mode": True, "no_pause": True}
+
+    result = sniper.execute_steps(page, steps, ctx)
+    captured = capsys.readouterr()
+    clicks = page.evaluate("() => window._clicks")
+
+    assert result == sniper.STEP_DRY_RUN, f"Expected STEP_DRY_RUN, got {result}"
+    assert "btn1" in clicks, "Step before confirms_booking should have executed"
+    assert "btn2" not in clicks, "confirms_booking step must NOT execute"
+    assert "btn3" not in clicks, "Steps after confirms_booking must NOT execute"
+    assert "stopping before final booking confirmation" in captured.out
+    print(f"\ntest_mode confirms_booking gate: clicks={clicks}, result={result}")
+
+
+# ── continue_if_no_booking fallthrough test ──────────────────────────────────
+
+def test_continue_if_no_booking_fallthrough(page, capsys):
+    """
+    Saturday poll returns STEP_NOT_FOUND (closed date) with continue_if_no_booking=True.
+    execute_steps should fall through to the Tuesday poll, which finds the available
+    date, runs on_match, and sets booked_time.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    page.set_content("""<!DOCTYPE html><html><body>
+        <div class="date_option closed" data-date="2026-06-06"
+             data-detail-status="Closed">Sat</div>
+        <div class="date_option available" data-date="2026-06-02"
+             data-detail-status="Reserve now">Tue</div>
+        <div id="time_chooser"></div>
+        <script>
+            document.querySelectorAll('.date_option.available').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    setTimeout(function() {
+                        document.getElementById('time_chooser').innerHTML =
+                            '<div class="slot_container">' +
+                            '<div class="slot"><div class="time">3:00</div></div>' +
+                            '</div>';
+                    }, 100);
+                });
+            });
+        </script>
+    </body></html>""")
+
+    on_match = [
+        {"action": "wait_for", "selector": ".slot_container"},
+        {"action": "click_preferred", "selector": ".slot_container",
+         "text_selector": ".time", "preferred": ["3:00"]},
+    ]
+    steps = [
+        {
+            "action": "poll",
+            "selector": ".date_option.available",
+            "match_attribute": "data-date",
+            "match_value": "2026-06-06",
+            "on_match": [],
+            "continue_if_no_booking": True,
+        },
+        {
+            "action": "poll",
+            "selector": ".date_option.available",
+            "match_attribute": "data-date",
+            "match_value": "2026-06-02",
+            "test_mode": True,
+            "on_match": on_match,
+        },
+    ]
+    ctx = {
+        "user": "testuser",
+        "password": "x",
+        "target_date": "2026-06-06",
+        "test_date": "2026-06-02",
+        "no_pause": True,
+    }
+
+    result = sniper.execute_steps(page, steps, ctx)
+    captured = capsys.readouterr()
+
+    assert "no booking — continuing to test date poll" in captured.out, \
+        "Should log the fallthrough message"
+    assert ctx.get("test_mode") is True, \
+        "test_mode should be set by Tuesday poll step"
+    assert ctx.get("booked_time") is not None, \
+        "Tuesday poll should have selected a time slot"
+    print(f"\nFallthrough: Saturday(closed) → Tuesday booked_time='{ctx['booked_time']}', result={result}")
