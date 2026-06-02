@@ -205,6 +205,9 @@ def execute_step(page, step, ctx):
     elif action == "poll":
         return execute_poll(page, step, ctx)
 
+    elif action == "parallel":
+        return execute_parallel(page, step, ctx)
+
     elif action == "click_preferred":
         return execute_click_preferred(page, step, ctx)
 
@@ -315,7 +318,11 @@ def execute_poll(page, step, ctx):
                     if "check_back" in classes:
                         status_lower = status.lower()
                         _days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-                        if any(d in status_lower for d in _days) and "today" not in status_lower:
+                        is_future_release = (
+                            (any(d in status_lower for d in _days) and "today" not in status_lower)
+                            or "tomorrow" in status_lower
+                        )
+                        if is_future_release:
                             print(f"  [{label}] [{ts()}] target date {match_value} releases on a future date ('{status}') — stopping")
                             return STEP_NOT_FOUND
                         if not lottery_join_attempted:
@@ -517,6 +524,69 @@ def execute_click_preferred(page, step, ctx):
 
     print(f"  [{label}] no bookable time slots found")
     return STEP_FAILURE
+
+
+def _parallel_poll_worker(storage_state, poll_step, ctx_dict, reservations_url, is_ci, result_queue):
+    """Worker for parallel poll execution; runs in its own process with cookies restored from storage_state."""
+    ctx = dict(ctx_dict)
+    label = ctx.get("user", "worker")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=is_ci)
+        context = browser.new_context(storage_state=storage_state)
+        page = context.new_page()
+        page.on("console", lambda msg: print(f"  [{label}] [{ts()}] [browser:{msg.type}] {msg.text}"))
+        page.on("pageerror", lambda err: print(f"  [{label}] [{ts()}] [browser:pageerror] {err}"))
+        try:
+            page.goto(reservations_url)
+            page.wait_for_load_state("load")
+            result = execute_poll(page, poll_step, ctx)
+        except Exception as e:
+            print(f"  [{label}] [{ts()}] parallel worker error: {e}")
+            result = STEP_FAILURE
+        finally:
+            browser.close()
+    result_queue.put((result, {"booked_time": ctx.get("booked_time", "unknown"), "test_mode": ctx.get("test_mode", False)}))
+
+
+def execute_parallel(page, step, ctx):
+    """Run multiple poll steps concurrently, each with its own browser session cloned from current cookies."""
+    label = ctx["user"]
+    is_ci = os.environ.get("CI") == "true"
+    poll_steps = step["polls"]
+    reservations_url = page.url
+    storage_state = page.context.storage_state()
+
+    result_queue = multiprocessing.Queue()
+    processes = [
+        multiprocessing.Process(
+            target=_parallel_poll_worker,
+            args=(storage_state, poll_step, dict(ctx), reservations_url, is_ci, result_queue),
+        )
+        for poll_step in poll_steps
+    ]
+
+    print(f"\n[{label}] [{ts()}] launching {len(poll_steps)} parallel polls")
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+
+    results = []
+    while not result_queue.empty():
+        results.append(result_queue.get())
+    print(f"\n[{label}] [{ts()}] parallel polls complete — results: {[r[0] for r in results]}")
+
+    # Priority: real booking > test dry run > not found
+    final_result = STEP_NOT_FOUND
+    for result, ctx_updates in results:
+        if result == STEP_SUCCESS:
+            ctx.update(ctx_updates)
+            return STEP_SUCCESS
+        if result == STEP_DRY_RUN and final_result != STEP_SUCCESS:
+            ctx.update(ctx_updates)
+            final_result = STEP_DRY_RUN
+
+    return final_result
 
 
 def run_site(site_config, user, password, target_date, dry_run=False, no_pause=False, debug=False):

@@ -351,6 +351,30 @@ def test_early_exit_future_check_back(page):
     print("\nCorrectly returned STEP_NOT_FOUND for future check_back date")
 
 
+def test_early_exit_tomorrow_check_back(page):
+    """
+    When the target date is 'check_back' with 'First release tomorrow @ 9:00am',
+    execute_poll should return STEP_NOT_FOUND immediately — not poll for 17 minutes.
+    """
+    import sniper
+    os.environ["CI"] = "true"
+
+    page.set_content(_booking_page(date_class="check_back", date_status="First release tomorrow @ 9:00am"))
+
+    step = {
+        "action": "poll",
+        "selector": ".date_option.available",
+        "match_attribute": "data-date",
+        "match_value": "2026-04-05",
+        "on_match": [],
+    }
+    ctx = {"user": "testuser", "password": "x", "target_date": "2026-04-05"}
+    result = sniper.execute_poll(page, step, ctx)
+
+    assert result == sniper.STEP_NOT_FOUND, f"Expected STEP_NOT_FOUND for 'tomorrow' check_back, got {result}"
+    print("\nCorrectly returned STEP_NOT_FOUND for 'tomorrow' check_back date")
+
+
 def test_phase2_date_unavailable_raises_and_outer_loop_exits(page):
     """
     After Phase 1 selects a slot, if the target date becomes 'unavailable' before

@@ -43,132 +43,95 @@ sites:
           - action: wait_for_url
             url: "**/reservations/new"
 
-      - action: poll
-        selector: ".date_option.available"
-        match_attribute: "data-date"
-        match_value: "{target_date}"
-        slot_retries: 3
-        card_button_selector: "#card-button"
-        continue_if_no_booking: true
-        on_match:
-          - action: wait_for
-            selector: ".slot_container"
+      - action: parallel
+        polls:
+          - selector: ".date_option.available"
+            match_attribute: "data-date"
+            match_value: "{target_date}"
+            slot_retries: 3
+            card_button_selector: "#card-button"
+            on_match: &booking_steps
+              - action: wait_for
+                selector: ".slot_container"
 
-          - action: click_preferred
-            selector: ".slot_container:not(:has(.slot.unavailable))"
-            text_selector: ".time"
-            strict: true
-            preferred: ["3:00", "3:30", "4:00", "4:30", "5:00", "5:30", "2:30", "2:00", "1:30", "1:00", "12:30", "12:00", "11:30", "11:00"]
+              - action: click_preferred
+                selector: ".slot_container:not(:has(.slot.unavailable))"
+                text_selector: ".time"
+                strict: true
+                preferred: ["3:00", "3:30", "4:00", "4:30", "5:00", "5:30", "2:30", "2:00", "1:30", "1:00", "12:30", "12:00", "11:30", "11:00"]
 
-          - action: wait_for
-            selector: "#card-button"
+              - action: wait_for
+                selector: "#card-button"
 
-          - action: click
-            selector: "#card-button"
+              - action: click
+                selector: "#card-button"
 
-          - action: wait_for
-            selector: ".price_option.no_contribution"
+              - action: wait_for
+                selector: ".price_option.no_contribution"
 
-          - action: click
-            selector: ".price_option.no_contribution"
+              - action: click
+                selector: ".price_option.no_contribution"
 
-          - action: wait_for
-            selector: "#card-button"
+              - action: wait_for
+                selector: "#card-button"
 
-          - action: click
-            selector: "#card-button"
+              - action: click
+                selector: "#card-button"
 
-          - action: wait_for_url
-            url: "**/reservations/confirmation**"
-            timeout: 15000
+              - action: wait_for_url
+                url: "**/reservations/confirmation**"
+                timeout: 15000
 
-          - action: assert_url
-            url: "https://reservations.mountmadonna.org/reservations/confirmation"
-            success: "BOOKING CONFIRMED!"
+              - action: assert_url
+                url: "https://reservations.mountmadonna.org/reservations/confirmation"
+                success: "BOOKING CONFIRMED!"
 
-      - action: poll
-        selector: ".date_option.available"
-        match_attribute: "data-date"
-        match_value: "{sunday_date}"
-        slot_retries: 3
-        card_button_selector: "#card-button"
-        continue_if_no_booking: true
-        on_match:
-          - action: wait_for
-            selector: ".slot_container"
+          - selector: ".date_option.available"
+            match_attribute: "data-date"
+            match_value: "{sunday_date}"
+            slot_retries: 3
+            card_button_selector: "#card-button"
+            on_match: *booking_steps
 
-          - action: click_preferred
-            selector: ".slot_container:not(:has(.slot.unavailable))"
-            text_selector: ".time"
-            strict: true
-            preferred: ["3:00", "3:30", "4:00", "4:30", "5:00", "5:30", "2:30", "2:00", "1:30", "1:00", "12:30", "12:00", "11:30", "11:00"]
+          - selector: ".date_option.available"
+            match_attribute: "data-date"
+            match_value: "{test_date}"
+            test_mode: true
+            slot_retries: 3
+            card_button_selector: "#card-button"
+            on_match:
+              - action: wait_for
+                selector: ".slot_container"
 
-          - action: wait_for
-            selector: "#card-button"
+              - action: click_preferred
+                selector: ".slot_container:not(:has(.slot.unavailable))"
+                text_selector: ".time"
+                strict: true
+                preferred: ["3:00", "3:30", "4:00", "4:30", "5:00", "5:30", "2:30", "2:00", "1:30", "1:00", "12:30", "12:00", "11:30", "11:00"]
 
-          - action: click
-            selector: "#card-button"
+              - action: wait_for
+                selector: "#card-button"
 
-          - action: wait_for
-            selector: ".price_option.no_contribution"
+              - action: click
+                selector: "#card-button"
 
-          - action: click
-            selector: ".price_option.no_contribution"
+              - action: wait_for
+                selector: ".price_option.no_contribution"
 
-          - action: wait_for
-            selector: "#card-button"
+              - action: click
+                selector: ".price_option.no_contribution"
 
-          - action: click
-            selector: "#card-button"
+              - action: wait_for
+                selector: "#card-button"
 
-          - action: wait_for_url
-            url: "**/reservations/confirmation**"
-            timeout: 15000
+              - action: click
+                selector: "#card-button"
+                confirms_booking: true
 
-          - action: assert_url
-            url: "https://reservations.mountmadonna.org/reservations/confirmation"
-            success: "BOOKING CONFIRMED!"
+              - action: wait_for_url
+                url: "**/reservations/confirmation**"
+                timeout: 15000
 
-      - action: poll
-        selector: ".date_option.available"
-        match_attribute: "data-date"
-        match_value: "{test_date}"
-        test_mode: true
-        slot_retries: 3
-        card_button_selector: "#card-button"
-        on_match:
-          - action: wait_for
-            selector: ".slot_container"
-
-          - action: click_preferred
-            selector: ".slot_container:not(:has(.slot.unavailable))"
-            text_selector: ".time"
-            strict: true
-            preferred: ["3:00", "3:30", "4:00", "4:30", "5:00", "5:30", "2:30", "2:00", "1:30", "1:00", "12:30", "12:00", "11:30", "11:00"]
-
-          - action: wait_for
-            selector: "#card-button"
-
-          - action: click
-            selector: "#card-button"
-
-          - action: wait_for
-            selector: ".price_option.no_contribution"
-
-          - action: click
-            selector: ".price_option.no_contribution"
-
-          - action: wait_for
-            selector: "#card-button"
-
-          - action: click
-            selector: "#card-button"
-            confirms_booking: true
-
-          - action: wait_for_url
-            url: "**/reservations/confirmation**"
-            timeout: 15000
-
-          - action: assert_url
-            url: "https://reservations.mountmadonna.org/reservations/confirmation"
-            success: "BOOKING CONFIRMED!"
+              - action: assert_url
+                url: "https://reservations.mountmadonna.org/reservations/confirmation"
+                success: "BOOKING CONFIRMED!"
