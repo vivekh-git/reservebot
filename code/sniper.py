@@ -419,14 +419,14 @@ def execute_poll(page, step, ctx):
                         slot_selected = True
                         # Phase 2: wait for server to resolve — no arbitrary timeout
                         # Success: card_button_selector becomes visible. Failure: target date becomes unavailable.
-                        print(f"  [{label}] [{ts()}] slot clicked — waiting for '{card_button_selector}' or date unavailable (no timeout)")
+                        print(f"  [{label}] [{ts()}] slot clicked — waiting for '{card_button_selector}' or date unavailable (timeout: 10min)")
                         page.wait_for_function(
                             f"() => {{"
                             f"  var el = document.querySelector('{card_button_selector}');"
                             f"  return (!!el && el.offsetWidth > 0) ||"
                             f"         !!document.querySelector('.date_option.unavailable[data-date=\"{match_value}\"]');"
                             f"}}",
-                            timeout=0
+                            timeout=600000
                         )
                         card_el = page.query_selector(card_button_selector)
                         if card_el and card_el.is_visible():
